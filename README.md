@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Dean00dev/claimfence@main
+      - uses: Dean00dev/ClaimFence@v0.1.0
         with:
           paths: README.md docs
           fail-on: warning
