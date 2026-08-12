@@ -1,0 +1,28 @@
+name: ClaimFence
+description: Lint Markdown for evidence-bound assurance claims
+author: Dean Egan
+branding:
+  icon: shield
+  color: blue
+inputs:
+  paths:
+    description: Space-separated files or directories to scan
+    required: false
+    default: .
+  fail-on:
+    description: Lowest severity that fails the step (info, warning, error, none)
+    required: false
+    default: warning
+runs:
+  using: composite
+  steps:
+    - name: Run ClaimFence
+      shell: bash
+      env:
+        CLAIMFENCE_PATHS: ${{ inputs.paths }}
+        CLAIMFENCE_FAIL_ON: ${{ inputs.fail-on }}
+        CLAIMFENCE_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        export PYTHONPATH="$CLAIMFENCE_ACTION_PATH/src${PYTHONPATH:+:$PYTHONPATH}"
+        read -r -a claimfence_paths <<< "$CLAIMFENCE_PATHS"
+        python -m claimfence "${claimfence_paths[@]}" --format github --fail-on "$CLAIMFENCE_FAIL_ON"

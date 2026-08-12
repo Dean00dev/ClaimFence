@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">ClaimFence mark</title>
+  <desc id="desc">A cyan shield divided by three evidence boundary bars</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17e5ff"/>
+      <stop offset="1" stop-color="#176bff"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="#0d1117"/>
+  <path d="M128 28 218 63v63c0 54-35 86-90 106-55-20-90-52-90-106V63l90-35Z" fill="none" stroke="url(#g)" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M72 91h112M72 127h112M83 163h90" stroke="url(#g)" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="128" cy="127" r="11" fill="#0d1117" stroke="#e6edf3" stroke-width="6"/>
+</svg>

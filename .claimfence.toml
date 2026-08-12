@@ -1,0 +1,4 @@
+[claimfence]
+fail_on = "warning"
+context_lines = 3
+exclude = ["tests/fixtures/**", "examples/unsafe-readme.md", "CHANGELOG.md"]

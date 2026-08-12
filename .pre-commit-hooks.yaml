@@ -1,0 +1,7 @@
+- id: claimfence
+  name: ClaimFence
+  description: Lint Markdown for evidence-bound assurance claims
+  entry: claimfence
+  language: python
+  types: [markdown]
+  args: [--fail-on, warning]
