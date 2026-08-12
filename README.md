@@ -160,8 +160,8 @@ the bundled action.
 ## Provenance
 
 ClaimFence was conceived and directed by Dean Egan and implemented through an
-AI-assisted build and separate cross-model review workflow. Its design follows one
-principle: **a claim should expose the boundary of the evidence supporting it.**
+AI-assisted build workflow. Its design follows one principle: **a claim should
+expose the boundary of the evidence supporting it.**
 
 No model API is used at runtime. Scanned documents stay on the machine or CI runner where
 the command executes.
