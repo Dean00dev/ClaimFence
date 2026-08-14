@@ -46,19 +46,30 @@ RULES = (
         "CF003",
         Severity.WARNING,
         re.compile(
-            r"\b(?:all|every|never|always|zero)\s+(?:attacks?|bypasses?|failures?|false\s+positives?|"
-            r"vulnerabilit(?:y|ies)|violations?|errors?)\b",
+            r"\b(?:"
+            r"(?:all|every|zero)\s+(?:attacks?|bypasses?|failures?|false\s+positives?|"
+            r"vulnerabilit(?:y|ies)|violations?|errors?)"
+            r"|(?:never|always)\s+(?:receives?|sends?|stores?|logs?|exposes?|transmits?|"
+            r"shares?|leaks?|persists?|writes?|returns?|accepts?|allows?|executes?|contacts?|"
+            r"calls?|fails?|errors?)"
+            r"|(?:does|do|can|will)\s+not\s+(?:receive|send|store|log|expose|transmit|"
+            r"share|leak|persist|write|return|accept|allow|execute|contact|call)"
+            r"|(?:makes?|performs?)\s+no\s+(?:external\s+)?(?:calls?|requests?)"
+            r"|no\s+(?:data|requests?|keys?|secrets?|tokens?|credentials?)\s+"
+            r"(?:leaves?|reaches?|crosses?|is\s+sent|is\s+stored)"
+            r")\b",
             re.IGNORECASE,
         ),
-        "universal or zero-result claim lacks nearby test conditions",
-        "Name the campaign size, input space, version, and evidence that produced this result.",
+        "universal, zero-result, or universal-negative claim lacks nearby test conditions",
+        "Name the relevant boundary, version, and evidence that supports this universal claim.",
         frozenset({"scope", "evidence"}),
     ),
     PhraseRule(
         "CF004",
         Severity.INFO,
         re.compile(
-            r"\b(?:passes?|passed|green)\s+(?:all\s+)?(?:\d[\d,]*|the)\s+(?:tests?|checks?|cases?|scenarios?)\b",
+            r"\b(?:passes?|passed|green)\s+(?:all\s+)?(?:\d[\d,]*|the)\s+"
+            r"(?:tests?|checks?|cases?|scenarios?)\b",
             re.IGNORECASE,
         ),
         "test-result claim has no nearby reproduction path",
@@ -68,11 +79,11 @@ RULES = (
 )
 
 
-EVIDENCE_PATTERNS = (
-    re.compile(r"\b(?:test(?:ed|s|ing)?|benchmark|evidence|report|receipt|reproduc(?:e|ible|tion)|"
-               r"verify|verification|CI|workflow|artifact|fixture|counterexample|mutation)\b", re.I),
-    re.compile(r"\[[^\]]+\]\([^)]+\)"),
-    re.compile(r"`(?:pytest|python\s+-m|npm\s+(?:test|run)|cargo\s+test|go\s+test|make\s+test)[^`]*`", re.I),
+COMMAND_PATTERN = re.compile(
+    r"^\s*\$?\s*(?:pytest|python(?:3)?\s+-m\s+(?:pytest|unittest)|"
+    r"npm\s+(?:test|run\b)|"
+    r"cargo\s+test|go\s+test|make\s+\S*test\b|tox\b|nox\b)",
+    re.IGNORECASE,
 )
 
 SCOPE_PATTERN = re.compile(
@@ -98,8 +109,9 @@ SUPPRESSION_PATTERN = re.compile(
 RULE_DESCRIPTIONS = {
     "CF001": "Absolute assurance claim",
     "CF002": "Unbounded assurance language",
-    "CF003": "Universal or zero-result claim",
+    "CF003": "Universal, zero-result, or universal-negative claim",
     "CF004": "Unanchored test-result claim",
+    "CF005": "Broken local evidence reference",
     "CF101": "Assurance claims without a limitations section",
     "CF102": "Assurance claims without a verification section",
 }

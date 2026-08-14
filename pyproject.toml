@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claimfence"
-version = "0.2.0"
+version = "0.3.0"
 description = "A deterministic linter for evidence-bound claims in technical documentation."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,8 +24,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/Dean00dev/claimfence"
-Issues = "https://github.com/Dean00dev/claimfence/issues"
+Homepage = "https://github.com/Dean00dev/ClaimFence"
+Issues = "https://github.com/Dean00dev/ClaimFence/issues"
 
 [project.scripts]
 claimfence = "claimfence.cli:main"

@@ -19,17 +19,22 @@ DEFAULT_EXCLUDES = (
 
 @dataclass(slots=True)
 class Config:
-    context_lines: int = 3
+    context_blocks: int = 1
+    context_lines: int | None = None
     fail_on: Severity | None = Severity.WARNING
     exclude: list[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDES))
     disabled_rules: set[str] = field(default_factory=set)
     extra_evidence_terms: list[str] = field(default_factory=list)
 
+    def context_radius(self) -> int:
+        """Return the logical-block radius, honoring the v0.2 compatibility key."""
+        return self.context_lines if self.context_lines is not None else self.context_blocks
 
-def load_config(path: Path | None) -> Config:
+
+def load_config(path: Path | None, root: Path | None = None) -> Config:
     config = Config()
     if path is None:
-        candidate = Path(".claimfence.toml")
+        candidate = (root or Path.cwd()) / ".claimfence.toml"
         if not candidate.exists():
             return config
         path = candidate
@@ -40,10 +45,18 @@ def load_config(path: Path | None) -> Config:
         raw = tomllib.load(stream)
     section = raw.get("claimfence", raw)
 
-    context_lines = section.get("context_lines", config.context_lines)
-    if not isinstance(context_lines, int) or not 0 <= context_lines <= 20:
-        raise ValueError("context_lines must be an integer from 0 to 20")
-    config.context_lines = context_lines
+    if "context_blocks" in section and "context_lines" in section:
+        raise ValueError("use context_blocks or legacy context_lines, not both")
+    if "context_blocks" in section:
+        context_blocks = section["context_blocks"]
+        if not isinstance(context_blocks, int) or not 0 <= context_blocks <= 20:
+            raise ValueError("context_blocks must be an integer from 0 to 20")
+        config.context_blocks = context_blocks
+    elif "context_lines" in section:
+        context_lines = section["context_lines"]
+        if not isinstance(context_lines, int) or not 0 <= context_lines <= 20:
+            raise ValueError("context_lines must be an integer from 0 to 20")
+        config.context_lines = context_lines
 
     fail_on = section.get("fail_on", "warning")
     if fail_on is None or str(fail_on).lower() == "none":

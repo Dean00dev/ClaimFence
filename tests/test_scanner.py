@@ -45,6 +45,207 @@ class ScannerTests(unittest.TestCase):
             findings, _ = scan_file(path, Config())
         self.assertEqual([], findings)
 
+    def test_soft_wrapped_epistemic_negation_is_not_a_finding(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Boundary\n\n"
+                "> This tool cannot determine\n"
+                "> whether it is safe to wait.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+
+    def test_rewrapping_preserves_rules_claims_and_fingerprints(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "This production-ready gateway prevents all attacks.\n\n"
+                "## Limitations\n\nUntested inputs are out of scope.\n",
+                encoding="utf-8",
+            )
+            first, _ = scan_file(path, Config(), root)
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "This production-ready gateway\nprevents all attacks.\n\n"
+                "## Limitations\n\nUntested inputs are out of scope.\n",
+                encoding="utf-8",
+            )
+            second, _ = scan_file(path, Config(), root)
+
+        first_contract = [
+            (finding.rule_id, finding.severity, finding.claim, finding.fingerprint)
+            for finding in first
+        ]
+        second_contract = [
+            (finding.rule_id, finding.severity, finding.claim, finding.fingerprint)
+            for finding in second
+        ]
+        self.assertEqual(first_contract, second_contract)
+        universal = next(finding for finding in second if finding.rule_id == "CF003")
+        self.assertEqual((6, 10), (universal.line, universal.column))
+
+    def test_universal_negative_is_an_assurance_finding(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "The browser never receives a model-provider API key.\n\n"
+                "## Limitations\n\nThis does not cover modified deployments.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertIn("CF003", {finding.rule_id for finding in findings})
+
+    def test_epistemic_boundary_suppresses_nested_universal_negative(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Boundary\n\n"
+                "This review does not establish that the browser never receives an API key.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+
+    def test_policy_intent_is_not_treated_as_measured_protection(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "SECURITY.md"
+            path.write_text(
+                "# Supported version\n\n"
+                "Pre-1.0 changes may break compatibility when needed to protect users.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+
+    def test_logical_blocks_are_not_mistaken_for_blocking_behavior(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Parser\n\nThe parser joins source-mapped logical blocks.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+
+    def test_blocks_with_a_security_object_remains_assurance_language(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\nThe gateway blocks attacks.\n\n"
+                "## Limitations\n\nOther inputs are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertIn("CF002", {finding.rule_id for finding in findings})
+
+    def test_evidence_words_without_an_anchor_do_not_satisfy_a_claim(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "Under version 1, the gateway is secure. See the campaign report.\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertIn("CF002", {finding.rule_id for finding in findings})
+
+    def test_missing_local_evidence_references_are_findings(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "Under version 1, the gateway is secure. Reproduce with "
+                "`pytest tests/missing.py`; inspect [the report](reports/missing.md).\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        broken = [finding for finding in findings if finding.rule_id == "CF005"]
+        self.assertEqual(2, len(broken))
+        self.assertEqual(
+            {"tests/missing.py", "reports/missing.md"},
+            {finding.claim for finding in broken},
+        )
+
+    def test_existing_empty_reference_satisfies_integrity_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "reports").mkdir()
+            (root / "tests").mkdir()
+            (root / "reports" / "receipt.md").touch()
+            (root / "tests" / "check.py").touch()
+            path = root / "docs" / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "Under version 1, the gateway is secure. Reproduce with "
+                "`pytest tests/check.py`; inspect [the receipt](../reports/receipt.md).\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+
+    def test_external_evidence_link_is_not_resolved_locally(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "Under version 1, the gateway is secure; inspect "
+                "[the CI run](https://example.com/runs/1).\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+
+    def test_local_evidence_reference_cannot_escape_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            path = root / "docs" / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "Under version 1, the gateway is secure; inspect "
+                "[the receipt](../../outside.md).\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        escaped = [finding for finding in findings if finding.rule_id == "CF005"]
+        self.assertEqual(1, len(escaped))
+        self.assertIn("escapes", escaped[0].message)
+
+    def test_reasoned_suppression_applies_to_a_wrapped_logical_block(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "<!-- claimfence-disable-next-line CF002: literal product status -->\n"
+                "The gateway is\nproduction-ready.\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, suppressed = scan_file(path, Config(), root)
+        self.assertEqual([], findings)
+        self.assertEqual(1, suppressed)
+
     def test_missing_path_is_an_error(self) -> None:
         with self.assertRaises(FileNotFoundError):
             scan_paths([Path("this-path-must-not-exist")], Config())
@@ -118,9 +319,9 @@ class ScannerTests(unittest.TestCase):
         summary = github_summary(result, Path.cwd(), Severity.WARNING)
         outputs = github_output_report(result, Severity.WARNING)
         self.assertEqual("ClaimFence", parsed_json["tool"]["name"])
-        self.assertEqual("0.2.0", parsed_json["tool"]["version"])
+        self.assertEqual("0.3.0", parsed_json["tool"]["version"])
         self.assertEqual("2.1.0", parsed_sarif["version"])
-        self.assertEqual("0.2.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
+        self.assertEqual("0.3.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
         self.assertIn("::error", annotations)
         self.assertIn("### Findings by rule", summary)
         self.assertIn("outcome=failed", outputs)
@@ -132,6 +333,14 @@ class ScannerTests(unittest.TestCase):
             config = load_config(path)
         self.assertEqual(Severity.ERROR, config.fail_on)
         self.assertEqual(4, config.context_lines)
+
+    def test_context_blocks_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "claimfence.toml"
+            path.write_text('[claimfence]\ncontext_blocks = 2\n', encoding="utf-8")
+            config = load_config(path)
+        self.assertEqual(2, config.context_blocks)
+        self.assertEqual(2, config.context_radius())
 
 
 if __name__ == "__main__":

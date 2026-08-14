@@ -53,9 +53,8 @@ def github_report(result: ScanResult, root: Path) -> str:
         path = _escape(_relative(finding.path, root))
         title = _escape(f"{finding.rule_id}: {finding.message}")
         message = _escape(f"{finding.claim} Fix: {finding.suggestion}")
-        lines.append(
-            f"::{level[finding.severity]} file={path},line={finding.line},col={finding.column},title={title}::{message}"
-        )
+        location = f"file={path},line={finding.line},col={finding.column},title={title}"
+        lines.append(f"::{level[finding.severity]} {location}::{message}")
     return "\n".join(lines)
 
 
@@ -151,6 +150,10 @@ def github_summary(result: ScanResult, root: Path, fail_on: Severity | None) -> 
 
 def github_output_report(result: ScanResult, fail_on: Severity | None) -> str:
     counts = result.counts()
+    if fail_on is None:
+        outcome = "report-only"
+    else:
+        outcome = "failed" if result.fails_at(fail_on) else "passed"
     values = {
         "files-scanned": result.files_scanned,
         "findings-count": len(result.findings),
@@ -159,7 +162,7 @@ def github_output_report(result: ScanResult, fail_on: Severity | None) -> str:
         "info-count": counts["info"],
         "suppressed-count": result.suppressed,
         "baselined-count": result.baselined,
-        "outcome": "failed" if result.fails_at(fail_on) else "passed",
+        "outcome": outcome,
     }
     return "\n".join(f"{name}={value}" for name, value in values.items())
 
@@ -172,4 +175,5 @@ def _relative(path: Path, root: Path) -> str:
 
 
 def _escape(value: str) -> str:
-    return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A").replace(":", "%3A").replace(",", "%2C")
+    escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return escaped.replace(":", "%3A").replace(",", "%2C")

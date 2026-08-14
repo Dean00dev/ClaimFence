@@ -3,8 +3,8 @@
 ## Verification
 
 Under version 0.3 with the included malformed-token fixtures, the gateway blocks the tested
-cases. Reproduce with `pytest tests/test_gateway.py` and inspect the
-[campaign report](reports/v0.3.md).
+cases. Reproduce with `python -m unittest discover -s tests -v` and inspect the
+[verification receipt](../docs/EVIDENCE.md).
 
 ## Limitations
 

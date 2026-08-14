@@ -19,15 +19,20 @@ Detects assurance verbs and adjectives such as `verified`, `hardened`, `producti
 and `prevents`. A bounded use needs both:
 
 - **scope:** a version, configuration, fixture set, campaign, or explicit tested condition;
-- **evidence:** a test, report, receipt, link, workflow, artifact, or reproduction command.
+- **evidence:** a concrete command, URL, or repository-local reference. Evidence-shaped
+  words such as “tested” and “report” do not satisfy the rule on their own.
 
 ## CF003 - Universal or zero-result claim
 
 **Default severity:** warning
 
-Detects constructions such as zero violations or every attack. The surrounding text must
-name the measured space and the evidence. This rule does not reject a zero result; it asks
-which campaign produced it.
+Detects constructions such as `zero violations`, `every attack`, and universal negatives
+such as `the browser never receives a key`. The surrounding logical blocks must name the
+relevant boundary and concrete evidence.
+
+Epistemic limitations remain exempt: “this review does not establish that the browser
+never receives a key” limits what the review proves. This ordering is intentional; broad
+negation suppression must not hide the universal-negative form used by assurance claims.
 
 ## CF004 - Unanchored test-result claim
 
@@ -35,6 +40,18 @@ which campaign produced it.
 
 Detects statements that a named number of tests or checks passed when the nearby text does
 not include a reproduction command, CI link, report, or other evidence anchor.
+
+## CF005 - Broken local evidence reference
+
+**Default severity:** warning
+
+Checks local Markdown evidence links and path tokens in reproduction commands near a
+matched claim. A finding is emitted when the resolved path escapes the selected repository
+root or does not exist. Markdown links resolve from the document directory; command paths
+resolve from the repository root.
+
+This rule verifies reference integrity only. It does not inspect whether the target is
+non-empty, relevant, current, authentic, or sufficient. External URLs are not fetched.
 
 ## CF101 - Missing limitations section
 
@@ -52,7 +69,9 @@ verification, reproduction, testing, or evidence.
 
 ## Suppression contract
 
-Suppressions apply to the immediately following line and require a non-empty reason:
+Suppressions are written on the line immediately before a prose block and require a
+non-empty reason. They apply to that whole logical block, so wrapping it differently does
+not change the suppression:
 
 ```markdown
 <!-- claimfence-disable-next-line CF002: quoted name from the upstream specification -->
@@ -60,5 +79,5 @@ The Secure Channel field is required.
 ```
 
 Use comma-separated rule identifiers for multiple rules or `ALL` only when the reason
-justifies ignoring every finding on that line. ClaimFence deliberately has no unreasoned
+justifies ignoring every finding in that block. ClaimFence deliberately has no unreasoned
 blanket comment syntax.

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 - 2026-08-14
+
+- Reflow soft-wrapped Markdown into source-mapped logical blocks before rule evaluation.
+- Keep rule results and fingerprints stable when prose is wrapped at different widths.
+- Distinguish epistemic limitations from universal-negative assurance claims.
+- Add `CF005` to validate repository-local evidence links and command paths.
+- Require concrete evidence anchors instead of accepting evidence-shaped words alone.
+- Add repository-root selection plus one-pass JSON and SARIF artifact outputs.
+- Report `outcome=report-only` when no failure threshold is configured.
+- Document the reference-integrity floor: existing files may still be empty or irrelevant.
+- Use canonical repository casing in clone URLs, badges, and project metadata.
+
 ## 0.2.0 - 2026-08-14
 
 - Add a concise Markdown scan summary to the GitHub Actions job summary.
