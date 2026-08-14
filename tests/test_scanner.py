@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,7 +13,9 @@ from claimfence.reporters import (
     github_output_report,
     github_report,
     github_summary,
+    html_report,
     json_report,
+    ledger_report,
     sarif_report,
 )
 from claimfence.scanner import scan_file, scan_paths
@@ -43,6 +46,17 @@ class ScannerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             findings, _ = scan_file(path, Config())
+        self.assertEqual([], findings)
+
+    def test_verification_word_inside_a_disclaimer_is_not_a_finding(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Boundary\n\nLinked is not a synonym for verified.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
         self.assertEqual([], findings)
 
     def test_soft_wrapped_epistemic_negation_is_not_a_finding(self) -> None:
@@ -88,6 +102,44 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(first_contract, second_contract)
         universal = next(finding for finding in second if finding.rule_id == "CF003")
         self.assertEqual((6, 10), (universal.line, universal.column))
+
+    def test_claim_identifier_survives_rewrap_and_unrelated_block_insertion(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "This production-ready gateway prevents all attacks.\n\n"
+                "## Limitations\n\nUntested inputs are out of scope.\n",
+                encoding="utf-8",
+            )
+            first = scan_paths([path], Config(), root)
+            path.write_text(
+                "# Demo\n\nAn unrelated introductory paragraph.\n\n"
+                "## Verification\n\nThis production-ready gateway\n"
+                "prevents all attacks.\n\n"
+                "## Limitations\n\nUntested inputs are out of scope.\n",
+                encoding="utf-8",
+            )
+            second = scan_paths([path], Config(), root)
+
+        self.assertEqual(1, len(first.claims))
+        self.assertEqual(1, len(second.claims))
+        self.assertEqual(first.claims[0].claim_id, second.claims[0].claim_id)
+
+    def test_duplicate_claim_text_receives_distinct_identifiers(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\nThis gateway is production-ready.\n\n"
+                "## Another deployment\n\nThis gateway is production-ready.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([path], Config(), root)
+
+        self.assertEqual(2, len(result.claims))
+        self.assertEqual(2, len({claim.claim_id for claim in result.claims}))
 
     def test_universal_negative_is_an_assurance_finding(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
@@ -181,6 +233,85 @@ class ScannerTests(unittest.TestCase):
             {finding.claim for finding in broken},
         )
 
+    def test_inline_filename_example_is_not_treated_as_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Tests\n\n"
+                "The tool protects Windows. A fixture may contain `NUL.txt` as data.\n\n"
+                "## Limitations\n\nOther platforms are out of scope.\n",
+                encoding="utf-8",
+            )
+            findings, _ = scan_file(path, Config(), root)
+        rules = {finding.rule_id for finding in findings}
+        self.assertIn("CF002", rules)
+        self.assertNotIn("CF005", rules)
+
+    def test_claim_ledger_maps_and_hashes_local_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "tests").mkdir()
+            receipt = root / "docs" / "receipt.md"
+            receipt.write_text("measured evidence\n", encoding="utf-8")
+            test_file = root / "tests" / "check.py"
+            test_file.write_text("assert True\n", encoding="utf-8")
+            readme = root / "README.md"
+            readme.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "Under version 1, the gateway is secure. Reproduce with "
+                "`pytest tests/check.py`; inspect [the receipt](docs/receipt.md).\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([readme], Config(), root)
+            payload = json.loads(ledger_report(result, root))
+            schema = json.loads(
+                (Path(__file__).parents[1] / "schema" / "claim-ledger-v1.schema.json")
+                .read_text(encoding="utf-8")
+            )
+
+        self.assertEqual("https://json-schema.org/draft/2020-12/schema", schema["$schema"])
+        self.assertEqual(schema["$id"], payload["$schema"])
+        self.assertEqual(1, payload["summary"]["claims_detected"])
+        claim = payload["claims"][0]
+        self.assertEqual("linked", claim["status"])
+        self.assertEqual(["CF002"], claim["rules"])
+        local = {
+            anchor["repository_path"]: anchor
+            for anchor in claim["evidence"]
+            if anchor["kind"] == "local-file"
+        }
+        self.assertEqual(
+            hashlib.sha256(b"measured evidence\n").hexdigest(),
+            local["docs/receipt.md"]["sha256"],
+        )
+        self.assertEqual(
+            hashlib.sha256(b"assert True\n").hexdigest(),
+            local["tests/check.py"]["sha256"],
+        )
+        self.assertIn("command", {anchor["kind"] for anchor in claim["evidence"]})
+
+    def test_evidence_map_is_deterministic_and_escapes_document_html(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\n## Verification\n\n"
+                "<script>alert('x')</script> This is production-ready.\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([path], Config(), root)
+            first = html_report(result, root)
+            second = html_report(result, root)
+
+        self.assertEqual(first, second)
+        self.assertNotIn("<script>alert('x')</script>", first)
+        self.assertIn("&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;", first)
+        self.assertIn("data-status=\"review\"", first)
+
     def test_existing_empty_reference_satisfies_integrity_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
@@ -269,6 +400,12 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual([], findings)
         self.assertEqual(1, suppressed)
 
+    def test_ledger_preserves_suppression_reason(self) -> None:
+        result = scan_paths([FIXTURES / "suppressed.md"], Config(), Path.cwd())
+        claim = result.claims[0]
+        self.assertEqual("suppressed", claim.status)
+        self.assertEqual(("term is the literal upstream product name",), claim.suppression_reasons)
+
     def test_suppression_without_reason_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "README.md"
@@ -319,12 +456,15 @@ class ScannerTests(unittest.TestCase):
         summary = github_summary(result, Path.cwd(), Severity.WARNING)
         outputs = github_output_report(result, Severity.WARNING)
         self.assertEqual("ClaimFence", parsed_json["tool"]["name"])
-        self.assertEqual("0.3.0", parsed_json["tool"]["version"])
+        self.assertEqual("0.4.0", parsed_json["tool"]["version"])
         self.assertEqual("2.1.0", parsed_sarif["version"])
-        self.assertEqual("0.3.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
+        self.assertEqual("0.4.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
         self.assertIn("::error", annotations)
         self.assertIn("### Findings by rule", summary)
         self.assertIn("outcome=failed", outputs)
+        self.assertIn("claims-count=", outputs)
+        self.assertIn("review-claims-count=", outputs)
+        self.assertIn("evidence-anchors-count=", outputs)
 
     def test_configuration_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

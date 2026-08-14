@@ -47,10 +47,56 @@ class Finding:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceAnchor:
+    kind: str
+    target: str
+    status: str
+    line: int
+    column: int
+    repository_path: str | None = None
+    sha256: str | None = None
+    size_bytes: int | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "kind": self.kind,
+            "target": self.target,
+            "status": self.status,
+            "line": self.line,
+            "column": self.column,
+        }
+        if self.repository_path is not None:
+            payload["repository_path"] = self.repository_path
+        if self.sha256 is not None:
+            payload["sha256"] = self.sha256
+        if self.size_bytes is not None:
+            payload["size_bytes"] = self.size_bytes
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimRecord:
+    claim_id: str
+    rule_ids: tuple[str, ...]
+    severity: Severity
+    path: Path
+    line: int
+    column: int
+    text: str
+    status: str
+    required_context: tuple[str, ...]
+    present_context: tuple[str, ...]
+    missing_context: tuple[str, ...]
+    evidence: tuple[EvidenceAnchor, ...]
+    suppression_reasons: tuple[str, ...] = ()
+
+
 @dataclass(slots=True)
 class ScanResult:
     files_scanned: int = 0
     findings: list[Finding] = field(default_factory=list)
+    claims: list[ClaimRecord] = field(default_factory=list)
     suppressed: int = 0
     baselined: int = 0
 
@@ -64,3 +110,9 @@ class ScanResult:
         return threshold is not None and any(
             finding.severity >= threshold for finding in self.findings
         )
+
+    def claim_counts(self) -> dict[str, int]:
+        return {
+            status: sum(claim.status == status for claim in self.claims)
+            for status in ("linked", "review", "suppressed")
+        }

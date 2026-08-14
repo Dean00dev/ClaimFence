@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.0 - 2026-08-14
+
+- Add a deterministic claim ledger covering both reviewable and context-linked claims.
+- Add a self-contained interactive HTML Evidence Map with no external assets or requests.
+- Map each claim to its required, present, and missing context plus nearby commands, URLs,
+  and repository-local evidence anchors.
+- Hash present local evidence files up to 16 MiB only when a ledger or map is requested.
+- Preserve reasoned suppression text in the claim ledger.
+- Add versioned JSON Schema for machine consumers and custom attestation predicates.
+- Expose claim-status and evidence-anchor counts as GitHub Action outputs.
+- Stop treating path-shaped inline-code examples as evidence without an evidence cue.
+- Recognize wrapped, formatted, and nested epistemic negation without silencing universal
+  negative assurance claims.
+- Recognize bold test and residual-risk subsection labels and reduce one-off document
+  structure noise.
+- Add adversarial tests for report determinism, HTML injection, evidence digests, suppression
+  reasons, and example-path false positives.
+
 ## 0.3.0 - 2026-08-14
 
 - Reflow soft-wrapped Markdown into source-mapped logical blocks before rule evaluation.

@@ -45,12 +45,31 @@ blocks. The model recognizes three context classes:
 3. **Limitation** - explicit negation, prototype status, non-goals, or unsupported scope.
 
 Phrase rules declare the context classes they require. Document rules check for dedicated
-verification and limitation sections when assurance findings exist. Generic evidence words
-do not qualify without an anchor.
+verification and limitation sections when at least two assurance findings make the missing
+document structure actionable. Markdown headings and bold `Tests` or `Residual risk`
+subsection labels count as structure. Generic evidence words do not qualify without an
+anchor.
 
 For local evidence, `CF005` verifies that the path resolves inside the selected repository
 root and exists. This is intentionally a floor: an empty or irrelevant file passes path
 integrity. ClaimFence does not fetch external URLs or authenticate any evidence.
+
+Inline path-shaped examples are not evidence merely because they resemble a filename. A
+bare inline path is considered an anchor only beside an evidence cue; paths inside a
+recognized reproduction command remain anchors. This keeps examples such as `NUL.txt`
+from becoming broken-evidence findings.
+
+## Claim ledger model
+
+The scanner retains a record for every matched assurance claim, including claims whose
+required context is present. Matches in the same logical claim are aggregated across rule
+identifiers and receive one of three dispositions: `linked`, `review`, or `suppressed`.
+These are lexical states, not truth values.
+
+Ledger and HTML reporters enrich present local-file anchors with SHA-256 only when one of
+those outputs is requested. The ordinary finding path therefore does not read linked
+evidence contents. Files larger than 16 MiB are not hashed. Generated HTML escapes all
+document-derived strings and contains only static reporter JavaScript.
 
 ## Negation ordering
 

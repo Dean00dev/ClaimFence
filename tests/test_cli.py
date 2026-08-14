@@ -106,6 +106,33 @@ class CliTests(unittest.TestCase):
             len(sarif_payload["runs"][0]["results"]),
         )
 
+    def test_one_scan_can_write_ledger_and_evidence_map(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            readme = root / "README.md"
+            readme.write_text(
+                "# Demo\n\nThis gateway is production-ready.\n",
+                encoding="utf-8",
+            )
+            ledger = root / "claimfence-ledger.json"
+            evidence_map = root / "claimfence-map.html"
+            with redirect_stdout(StringIO()):
+                code = main([
+                    "README.md",
+                    "--root", str(root),
+                    "--fail-on", "none",
+                    "--ledger-output", str(ledger),
+                    "--html-output", str(evidence_map),
+                    "--no-color",
+                ])
+            payload = json.loads(ledger.read_text(encoding="utf-8"))
+            markup = evidence_map.read_text(encoding="utf-8")
+
+        self.assertEqual(0, code)
+        self.assertEqual(1, payload["summary"]["claims_detected"])
+        self.assertIn("ClaimFence Evidence Map", markup)
+        self.assertIn("Needs review", markup)
+
     def test_root_resolves_paths_and_default_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

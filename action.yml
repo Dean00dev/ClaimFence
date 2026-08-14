@@ -33,6 +33,14 @@ inputs:
     description: Optional path for a SARIF 2.1.0 report
     required: false
     default: ""
+  ledger-output:
+    description: Optional path for the deterministic claim-and-evidence ledger
+    required: false
+    default: ""
+  html-output:
+    description: Optional path for the self-contained interactive evidence map
+    required: false
+    default: ""
 outputs:
   files-scanned:
     description: Number of Markdown files scanned
@@ -55,6 +63,21 @@ outputs:
   baselined-count:
     description: Number of findings ignored by the baseline
     value: ${{ steps.scan.outputs.baselined-count }}
+  claims-count:
+    description: Number of distinct assurance claims detected
+    value: ${{ steps.scan.outputs.claims-count }}
+  linked-claims-count:
+    description: Claims with their required lexical context and a concrete anchor
+    value: ${{ steps.scan.outputs.linked-claims-count }}
+  review-claims-count:
+    description: Claims missing context required by at least one matched rule
+    value: ${{ steps.scan.outputs.review-claims-count }}
+  suppressed-claims-count:
+    description: Claims whose missing-context matches were suppressed with a documented reason
+    value: ${{ steps.scan.outputs.suppressed-claims-count }}
+  evidence-anchors-count:
+    description: Distinct commands, URLs, and local references mapped to claims
+    value: ${{ steps.scan.outputs.evidence-anchors-count }}
   outcome:
     description: ClaimFence threshold outcome (passed, failed, or report-only)
     value: ${{ steps.scan.outputs.outcome }}
@@ -72,6 +95,8 @@ runs:
         CLAIMFENCE_ROOT: ${{ inputs.root }}
         CLAIMFENCE_JSON_OUTPUT: ${{ inputs.json-output }}
         CLAIMFENCE_SARIF_OUTPUT: ${{ inputs.sarif-output }}
+        CLAIMFENCE_LEDGER_OUTPUT: ${{ inputs.ledger-output }}
+        CLAIMFENCE_HTML_OUTPUT: ${{ inputs.html-output }}
         CLAIMFENCE_ACTION_PATH: ${{ github.action_path }}
       run: |
         export PYTHONPATH="$CLAIMFENCE_ACTION_PATH/src${PYTHONPATH:+:$PYTHONPATH}"
@@ -95,5 +120,11 @@ runs:
         fi
         if [[ -n "$CLAIMFENCE_SARIF_OUTPUT" ]]; then
           claimfence_args+=(--sarif-output "$CLAIMFENCE_SARIF_OUTPUT")
+        fi
+        if [[ -n "$CLAIMFENCE_LEDGER_OUTPUT" ]]; then
+          claimfence_args+=(--ledger-output "$CLAIMFENCE_LEDGER_OUTPUT")
+        fi
+        if [[ -n "$CLAIMFENCE_HTML_OUTPUT" ]]; then
+          claimfence_args+=(--html-output "$CLAIMFENCE_HTML_OUTPUT")
         fi
         python -m claimfence "${claimfence_args[@]}"

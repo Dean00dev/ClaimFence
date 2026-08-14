@@ -12,7 +12,9 @@ from .reporters import (
     github_output_report,
     github_report,
     github_summary,
+    html_report,
     json_report,
+    ledger_report,
     sarif_report,
     text_report,
 )
@@ -35,6 +37,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, help="write the report to a file")
     parser.add_argument("--json-output", type=Path, help="also write a JSON report to this file")
     parser.add_argument("--sarif-output", type=Path, help="also write a SARIF report to this file")
+    parser.add_argument(
+        "--ledger-output",
+        type=Path,
+        help="write a deterministic claim-and-evidence ledger as JSON",
+    )
+    parser.add_argument(
+        "--html-output",
+        type=Path,
+        help="write a self-contained interactive evidence map",
+    )
     parser.add_argument("--fail-on", choices=("info", "warning", "error", "none"))
     parser.add_argument("--baseline", type=Path, help="ignore fingerprints in this baseline")
     parser.add_argument(
@@ -96,6 +108,10 @@ def main(argv: list[str] | None = None) -> int:
             _write(args.json_output, json_report(result))
         if args.sarif_output:
             _write(args.sarif_output, sarif_report(result, root))
+        if args.ledger_output:
+            _write(args.ledger_output, ledger_report(result, root))
+        if args.html_output:
+            _write(args.html_output, html_report(result, root))
         if args.github_summary:
             _append(args.github_summary, github_summary(result, root, config.fail_on))
         if args.github_output:

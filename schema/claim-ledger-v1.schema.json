@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.4.0/schema/claim-ledger-v1.schema.json",
+  "title": "ClaimFence claim ledger",
+  "description": "A deterministic inventory of matched assurance claims and nearby evidence anchors.",
+  "type": "object",
+  "required": ["schema_version", "tool", "summary", "claims", "interpretation", "limitations"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0"},
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "ClaimFence"},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["files_scanned", "claims_detected", "claim_statuses", "evidence_anchors", "findings", "finding_counts", "suppressed", "baselined"],
+      "properties": {
+        "files_scanned": {"type": "integer", "minimum": 0},
+        "claims_detected": {"type": "integer", "minimum": 0},
+        "claim_statuses": {
+          "type": "object",
+          "required": ["linked", "review", "suppressed"],
+          "properties": {
+            "linked": {"type": "integer", "minimum": 0},
+            "review": {"type": "integer", "minimum": 0},
+            "suppressed": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "evidence_anchors": {"type": "integer", "minimum": 0},
+        "findings": {"type": "integer", "minimum": 0},
+        "finding_counts": {
+          "type": "object",
+          "required": ["info", "warning", "error"],
+          "properties": {
+            "info": {"type": "integer", "minimum": 0},
+            "warning": {"type": "integer", "minimum": 0},
+            "error": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "suppressed": {"type": "integer", "minimum": 0},
+        "baselined": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "rules", "severity", "path", "line", "column", "text", "status", "context", "suppression_reasons", "evidence"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^CLM-[0-9a-f]{16}$"},
+          "rules": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+          "severity": {"enum": ["info", "warning", "error"]},
+          "path": {"type": "string"},
+          "line": {"type": "integer", "minimum": 1},
+          "column": {"type": "integer", "minimum": 1},
+          "text": {"type": "string"},
+          "status": {"enum": ["linked", "review", "suppressed"]},
+          "context": {
+            "type": "object",
+            "required": ["required", "present", "missing"],
+            "properties": {
+              "required": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+              "present": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+              "missing": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+            },
+            "additionalProperties": false
+          },
+          "suppression_reasons": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["kind", "target", "status", "line", "column"],
+              "properties": {
+                "kind": {"enum": ["command", "external-url", "local-file", "local-path"]},
+                "target": {"type": "string"},
+                "status": {"enum": ["present", "present-unhashed", "directory", "missing", "outside-root", "not-executed", "not-fetched"]},
+                "line": {"type": "integer", "minimum": 1},
+                "column": {"type": "integer", "minimum": 1},
+                "repository_path": {"type": "string"},
+                "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "size_bytes": {"type": "integer", "minimum": 0}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "required": ["linked", "review", "suppressed"],
+      "properties": {
+        "linked": {"type": "string", "minLength": 1},
+        "review": {"type": "string", "minLength": 1},
+        "suppressed": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+  },
+  "additionalProperties": false
+}

@@ -33,6 +33,32 @@ not show readers how to evaluate them.
 ClaimFence turns the first form into an actionable finding. The second form names a
 version, test space, reproduction command, evidence location, and limitation.
 
+## The Evidence Map
+
+ClaimFence v0.4 inventories every assurance claim it recognizes—not only the ones that
+fail—and maps each claim to its nearby scope, limitations, commands, URLs, and local
+evidence files. Local files receive a SHA-256 digest when the map is generated. The result
+is available as deterministic JSON and as a self-contained interactive HTML report.
+
+<p align="center">
+  <img src="assets/evidence-map-preview.svg" width="100%" alt="ClaimFence Evidence Map showing three Doorknob README claims that need review">
+</p>
+
+This is a dogfood result from the author's own Doorknob README. It is deliberately not a
+score: `linked` means the expected lexical context and a concrete anchor were detected.
+It does **not** mean the claim is true or the evidence is sufficient.
+
+```bash
+claimfence README.md docs --fail-on none \
+  --ledger-output claimfence-ledger.json \
+  --html-output claimfence-map.html
+```
+
+The ledger follows the versioned
+[`claim-ledger-v1` schema](schema/claim-ledger-v1.schema.json). Commands are recorded but
+never executed, external URLs are recorded but never fetched, and local hashes establish
+byte identity rather than evidence quality. See the [Evidence Map contract](docs/EVIDENCE_MAP.md).
+
 ## Quick start
 
 ClaimFence requires Python 3.11 or later and has no runtime dependencies.
@@ -73,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: Dean00dev/ClaimFence@v0.3.0
+      - uses: Dean00dev/ClaimFence@v0.4.0
         id: claimfence
         with:
           paths: README.md docs
@@ -89,16 +115,21 @@ exposes stable outputs for follow-on steps:
 | `findings-count` | Findings remaining after baseline filtering |
 | `error-count`, `warning-count`, `info-count` | Findings by severity |
 | `suppressed-count`, `baselined-count` | Findings intentionally omitted |
+| `claims-count` | Distinct assurance claims in the full ledger |
+| `linked-claims-count`, `review-claims-count`, `suppressed-claims-count` | Claims by map status |
+| `evidence-anchors-count` | Distinct commands, URLs, and local references mapped to claims |
 | `outcome` | `passed`, `failed`, or `report-only` at the configured threshold |
 
 Existing projects can supply the same config and baseline used by the CLI:
 
 ```yaml
-      - uses: Dean00dev/ClaimFence@v0.3.0
+      - uses: Dean00dev/ClaimFence@v0.4.0
         with:
           paths: README.md docs
           config: .claimfence.toml
           baseline: .claimfence-baseline.json
+          ledger-output: claimfence-ledger.json
+          html-output: claimfence-map.html
 ```
 
 For security-sensitive workflows, replace version tags with the full commit SHA you have
@@ -108,7 +139,9 @@ annotations:
 ```bash
 claimfence . --fail-on none \
   --json-output claimfence.json \
-  --sarif-output claimfence.sarif
+  --sarif-output claimfence.sarif \
+  --ledger-output claimfence-ledger.json \
+  --html-output claimfence-map.html
 ```
 
 With `fail-on: none`, the Action returns success so reports can be uploaded, but its
@@ -192,8 +225,13 @@ the bundled action.
   selected repository root. An empty, irrelevant, stale, or fabricated file can still
   satisfy that check. External URLs are not fetched or authenticated.
 - Nearby evidence may still be weak or unrelated. A clean scan is not a factual audit.
+- Evidence Map statuses are lexical dispositions, not confidence levels. There is no trust
+  score, pass percentage, factual verdict, or certification.
+- Commands shown in the map are not executed. External URLs are not fetched. Local evidence
+  files up to 16 MiB are hashed only while producing a ledger or HTML map; larger files are
+  marked present but unhashed.
 - A finding is a review prompt, not proof that the underlying system is unsafe.
-- Rule coverage is intentionally narrow in v0.3.0. Synonyms and domain-specific claims can
+- Rule coverage is intentionally narrow in v0.4.0. Synonyms and domain-specific claims can
   be missed.
 - English is the only supported prose language in this release.
 - Markdown rendered from templates or generated after the scan is outside the tested path.
@@ -204,7 +242,7 @@ ClaimFence was conceived and directed by Dean Egan and implemented through an
 AI-assisted build workflow. Its design follows one principle: **a claim should
 expose the boundary of the evidence supporting it.**
 
-For v0.3.0, [runtime dependencies are empty](pyproject.toml) and the executable scan path
+For v0.4.0, [runtime dependencies are empty](pyproject.toml) and the executable scan path
 is inspectable in [`src/claimfence`](src/claimfence). Scanned documents are processed on
 the machine or CI runner invoking the command.
 

@@ -50,6 +50,9 @@ matched claim. A finding is emitted when the resolved path escapes the selected 
 root or does not exist. Markdown links resolve from the document directory; command paths
 resolve from the repository root.
 
+A path-shaped inline-code example is not treated as evidence unless the surrounding block
+contains an evidence cue such as `inspect`, `reproduce`, `report`, or `verification`.
+
 This rule verifies reference integrity only. It does not inspect whether the target is
 non-empty, relevant, current, authentic, or sufficient. External URLs are not fetched.
 
@@ -57,15 +60,16 @@ non-empty, relevant, current, authentic, or sufficient. External URLs are not fe
 
 **Default severity:** warning
 
-When a document contains assurance findings, ClaimFence expects a heading containing one
-of: limitation, boundary, non-goal, or “what this does not”.
+When a document contains at least two assurance findings, ClaimFence expects a section
+marker containing one of: limitation, boundary, scope, residual risk, non-goal, or “what
+this does not”.
 
 ## CF102 - Missing verification section
 
 **Default severity:** warning
 
-When a document contains assurance findings, ClaimFence expects a heading that names
-verification, reproduction, testing, or evidence.
+When a document contains at least two assurance findings, ClaimFence expects a heading or
+bold subsection marker that names verification, reproduction, tests, checks, or evidence.
 
 ## Suppression contract
 

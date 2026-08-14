@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import fnmatch
 import hashlib
 from pathlib import Path
@@ -9,7 +9,7 @@ from typing import Iterable
 from urllib.parse import unquote, urlsplit
 
 from .config import Config
-from .models import Finding, ScanResult, Severity
+from .models import ClaimRecord, EvidenceAnchor, Finding, ScanResult, Severity
 from .rules import (
     COMMAND_PATTERN,
     LIMITATION_PATTERN,
@@ -34,6 +34,12 @@ PATH_TOKEN_PATTERN = re.compile(
     r")(?![\w.-])",
     re.IGNORECASE,
 )
+EVIDENCE_CUE_PATTERN = re.compile(
+    r"\b(?:evidence|inspect|link|report|receipt|reproduc(?:e|tion)|results?|run|see|"
+    r"source|test(?:ed|ing|s)?|verif(?:y|ied|ication))\b",
+    re.IGNORECASE,
+)
+MAX_HASH_BYTES = 16 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +67,60 @@ class EvidenceReference:
     relative_to_document: bool
 
 
+@dataclass(slots=True)
+class _ClaimAccumulator:
+    claim_id: str
+    path: Path
+    line: int
+    column: int
+    text: str
+    rule_ids: set[str] = field(default_factory=set)
+    severity: Severity = Severity.INFO
+    required_context: set[str] = field(default_factory=set)
+    present_context: set[str] = field(default_factory=set)
+    evidence: dict[tuple[str, str, int, int], EvidenceAnchor] = field(default_factory=dict)
+    review_rules: set[str] = field(default_factory=set)
+    suppressed_rules: set[str] = field(default_factory=set)
+    suppression_reasons: set[str] = field(default_factory=set)
+
+    def freeze(self) -> ClaimRecord:
+        if self.review_rules:
+            status = "review"
+        elif self.suppressed_rules:
+            status = "suppressed"
+        else:
+            status = "linked"
+        missing = self.required_context - self.present_context
+        anchors = tuple(
+            sorted(
+                self.evidence.values(),
+                key=lambda anchor: (anchor.line, anchor.column, anchor.kind, anchor.target),
+            )
+        )
+        return ClaimRecord(
+            self.claim_id,
+            tuple(sorted(self.rule_ids)),
+            self.severity,
+            self.path,
+            self.line,
+            self.column,
+            self.text,
+            status,
+            tuple(sorted(self.required_context)),
+            tuple(sorted(self.present_context)),
+            tuple(sorted(missing)),
+            anchors,
+            tuple(sorted(self.suppression_reasons)),
+        )
+
+
+@dataclass(slots=True)
+class _FileScan:
+    findings: list[Finding] = field(default_factory=list)
+    claims: list[ClaimRecord] = field(default_factory=list)
+    suppressed: int = 0
+
+
 def scan_paths(
     paths: Iterable[Path],
     config: Config,
@@ -77,15 +137,24 @@ def scan_paths(
         raise FileNotFoundError(f"path not found: {missing[0]}")
     for path in _discover(requested, config.exclude):
         result.files_scanned += 1
-        file_findings, suppressed = scan_file(path, config, repository_root)
-        result.findings.extend(file_findings)
-        result.suppressed += suppressed
+        file_scan = _scan_file_details(path, config, repository_root)
+        result.findings.extend(file_scan.findings)
+        result.claims.extend(file_scan.claims)
+        result.suppressed += file_scan.suppressed
     result.findings.sort(
         key=lambda finding: (
             finding.path.as_posix(),
             finding.line,
             finding.column,
             finding.rule_id,
+        )
+    )
+    result.claims.sort(
+        key=lambda claim: (
+            claim.path.as_posix(),
+            claim.line,
+            claim.column,
+            claim.claim_id,
         )
     )
     return result
@@ -96,16 +165,39 @@ def scan_file(
     config: Config,
     root: Path | None = None,
 ) -> tuple[list[Finding], int]:
-    repository_root = (root or Path.cwd()).resolve()
+    scan = _scan_file_details(path, config, (root or Path.cwd()).resolve())
+    return scan.findings, scan.suppressed
+
+
+def _scan_file_details(
+    path: Path,
+    config: Config,
+    root: Path,
+) -> _FileScan:
+    repository_root = root.resolve()
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
     blocks = _logical_blocks(lines)
     suppression_map = _block_suppressions(lines, blocks)
     headings = [block.scan_text.strip().lower() for block in blocks if block.kind == "heading"]
+    section_markers = headings + [
+        re.sub(r"[*_~]+", "", block.raw_text).strip().lower()
+        for block in blocks
+        if re.match(
+            r"^\s*(?:\*\*|__)?(?:tests?|checks?|verification|reproduction|evidence|"
+            r"limitations?|boundaries|residual\s+risks?)\b",
+            block.raw_text,
+            re.IGNORECASE,
+        )
+    ]
     findings: list[Finding] = []
     suppressed = 0
-    assurance_blocks: list[int] = []
+    assurance_findings: list[Finding] = []
     claim_blocks: set[int] = set()
+    claims: dict[str, _ClaimAccumulator] = {}
+    claim_ids: dict[tuple[int, str], str] = {}
+    claim_occurrences: dict[str, int] = {}
+    evidence_cache: dict[int, tuple[EvidenceAnchor, ...]] = {}
 
     for index, block in enumerate(blocks):
         line = block.scan_text
@@ -125,29 +217,68 @@ def scan_file(
                     path,
                     repository_root,
                 )
-                if rule.required_context.issubset(present):
-                    continue
-                block_suppressions = suppression_map.get(index, set())
-                if rule.rule_id in block_suppressions or "ALL" in block_suppressions:
-                    suppressed += 1
-                    continue
                 position = block.positions[match.start()]
                 claim = _claim_excerpt(line, match.start())
-                findings.append(
-                    _finding(
-                        rule.rule_id,
-                        rule.severity,
+                normalized_claim = _normalized_claim(claim)
+                claim_key = (index, normalized_claim)
+                claim_id = claim_ids.get(claim_key)
+                if claim_id is None:
+                    occurrence = claim_occurrences.get(normalized_claim, 0)
+                    claim_occurrences[normalized_claim] = occurrence + 1
+                    claim_id = _claim_record_id(
+                        path,
+                        claim,
+                        repository_root,
+                        occurrence,
+                    )
+                    claim_ids[claim_key] = claim_id
+                accumulator = claims.get(claim_id)
+                if accumulator is None:
+                    accumulator = _ClaimAccumulator(
+                        claim_id,
                         path,
                         position.line,
                         position.column,
-                        rule.message,
                         claim,
-                        rule.suggestion,
-                        repository_root,
                     )
+                    claims[claim_id] = accumulator
+                accumulator.rule_ids.add(rule.rule_id)
+                accumulator.severity = max(accumulator.severity, rule.severity)
+                accumulator.required_context.update(rule.required_context)
+                accumulator.present_context.update(present)
+                anchors = evidence_cache.get(index)
+                if anchors is None:
+                    anchors = _context_evidence_anchors(context, path, repository_root)
+                    evidence_cache[index] = anchors
+                for anchor in anchors:
+                    key = (anchor.kind, anchor.target, anchor.line, anchor.column)
+                    accumulator.evidence[key] = anchor
+
+                if rule.required_context.issubset(present):
+                    break
+                block_suppressions = suppression_map.get(index, {})
+                if rule.rule_id in block_suppressions or "ALL" in block_suppressions:
+                    suppressed += 1
+                    accumulator.suppressed_rules.add(rule.rule_id)
+                    accumulator.suppression_reasons.add(
+                        block_suppressions.get(rule.rule_id, block_suppressions.get("ALL", ""))
+                    )
+                    break
+                accumulator.review_rules.add(rule.rule_id)
+                finding = _finding(
+                    rule.rule_id,
+                    rule.severity,
+                    path,
+                    position.line,
+                    position.column,
+                    rule.message,
+                    claim,
+                    rule.suggestion,
+                    repository_root,
                 )
+                findings.append(finding)
                 if rule.rule_id in {"CF001", "CF002", "CF003"}:
-                    assurance_blocks.append(index)
+                    assurance_findings.append(finding)
                 break
 
     if "CF005" not in config.disabled_rules:
@@ -162,52 +293,59 @@ def scan_file(
         findings.extend(reference_findings)
         suppressed += reference_suppressed
 
-    if assurance_blocks:
-        first_index = assurance_blocks[0]
-        first_block = blocks[first_index]
-        first_position = first_block.positions[0]
-        first_claim = _claim_excerpt(first_block.scan_text, 0)
+    if len(assurance_findings) >= 2:
+        first_assurance = assurance_findings[0]
         if "CF101" not in config.disabled_rules and not any(
             re.search(
-                r"\b(?:limitations?|boundaries|non-goals?|what\s+it\s+does\s+not)\b",
+                r"\b(?:limitations?|boundaries|non-goals?|residual\s+risks?|scope|"
+                r"not\s+yet\s+demonstrated|what\b[^\n]{0,60}\bdoes\s+not|"
+                r"does\s+and\s+does\s+not)\b",
                 heading,
                 re.I,
             )
-            for heading in headings
+            for heading in section_markers
         ):
             findings.append(
                 _finding(
                     "CF101",
                     Severity.WARNING,
                     path,
-                    first_position.line,
-                    first_position.column,
+                    first_assurance.line,
+                    first_assurance.column,
                     "assurance claims appear in a document with no limitations section",
-                    first_claim,
+                    first_assurance.claim,
                     "Add a clearly titled limitations, boundaries, non-goals, or "
                     "'what this does not establish' section.",
                     repository_root,
                 )
             )
         if "CF102" not in config.disabled_rules and not any(
-            re.search(r"\b(?:verify|verification|reproduc|testing|evidence)\b", heading, re.I)
-            for heading in headings
+            re.search(
+                r"\b(?:verify|verification|reproduc|testing|tests?|checks?|evidence)\b",
+                heading,
+                re.I,
+            )
+            for heading in section_markers
         ):
             findings.append(
                 _finding(
                     "CF102",
                     Severity.WARNING,
                     path,
-                    first_position.line,
-                    first_position.column,
+                    first_assurance.line,
+                    first_assurance.column,
                     "assurance claims appear in a document with no verification section",
-                    first_claim,
+                    first_assurance.claim,
                     "Add a verification or reproduction section with exact commands and "
                     "expected evidence.",
                     repository_root,
                 )
             )
-    return findings, suppressed
+    return _FileScan(
+        findings,
+        [claim.freeze() for claim in claims.values()],
+        suppressed,
+    )
 
 
 def _discover(paths: Iterable[Path], excludes: list[str]) -> list[Path]:
@@ -384,13 +522,17 @@ def _mask_inline_markup(raw_text: str) -> str:
     return "".join(masked)
 
 
-def _block_suppressions(lines: list[str], blocks: list[ProseBlock]) -> dict[int, set[str]]:
-    directives: dict[int, set[str]] = {}
+def _block_suppressions(
+    lines: list[str],
+    blocks: list[ProseBlock],
+) -> dict[int, dict[str, str]]:
+    directives: dict[int, dict[str, str]] = {}
     for line_number, line in enumerate(lines, start=1):
         match = SUPPRESSION_PATTERN.search(line)
         if match:
+            reason = match.group(2).strip()
             directives[line_number + 1] = {
-                value.strip().upper() for value in match.group(1).split(",")
+                value.strip().upper(): reason for value in match.group(1).split(",")
             }
     return {
         index: directives[block.start_line]
@@ -438,6 +580,120 @@ def _block_has_concrete_evidence(block: ProseBlock, document: Path, root: Path) 
     return False
 
 
+def _context_evidence_anchors(
+    blocks: list[ProseBlock],
+    document: Path,
+    root: Path,
+) -> tuple[EvidenceAnchor, ...]:
+    anchors: dict[tuple[str, str, int, int], EvidenceAnchor] = {}
+    for block in blocks:
+        for reference in _evidence_references(block):
+            anchor = _anchor_for_reference(reference, document, root)
+            if anchor is not None:
+                key = (anchor.kind, anchor.target, anchor.line, anchor.column)
+                anchors[key] = anchor
+
+        for match in INLINE_CODE_PATTERN.finditer(block.raw_text):
+            command = match.group("code").strip()
+            if not COMMAND_PATTERN.search(command):
+                continue
+            position = block.positions[match.start("code")]
+            anchor = EvidenceAnchor(
+                "command",
+                re.sub(r"\s+", " ", command),
+                "not-executed",
+                position.line,
+                position.column,
+            )
+            anchors[(anchor.kind, anchor.target, anchor.line, anchor.column)] = anchor
+
+        for match in BARE_URL_PATTERN.finditer(block.raw_text):
+            position = block.positions[match.start()]
+            anchor = EvidenceAnchor(
+                "external-url",
+                match.group(0).rstrip(".,;"),
+                "not-fetched",
+                position.line,
+                position.column,
+            )
+            anchors[(anchor.kind, anchor.target, anchor.line, anchor.column)] = anchor
+    return tuple(anchors.values())
+
+
+def _anchor_for_reference(
+    reference: EvidenceReference,
+    document: Path,
+    root: Path,
+) -> EvidenceAnchor | None:
+    target = reference.target.strip().strip("<>")
+    if not target or target.startswith(("#", "/", "//")):
+        return None
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc:
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        return EvidenceAnchor(
+            "external-url",
+            target,
+            "not-fetched",
+            reference.position.line,
+            reference.position.column,
+        )
+    path_text = unquote(parsed.path)
+    if not path_text:
+        return None
+    base = document.parent if reference.relative_to_document else root
+    candidate = (base / path_text).resolve()
+    try:
+        repository_path = candidate.relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return EvidenceAnchor(
+            "local-path",
+            target,
+            "outside-root",
+            reference.position.line,
+            reference.position.column,
+        )
+    if not candidate.exists():
+        return EvidenceAnchor(
+            "local-path",
+            target,
+            "missing",
+            reference.position.line,
+            reference.position.column,
+            repository_path,
+        )
+    if not candidate.is_file():
+        return EvidenceAnchor(
+            "local-path",
+            target,
+            "directory",
+            reference.position.line,
+            reference.position.column,
+            repository_path,
+        )
+    size = candidate.stat().st_size
+    if size > MAX_HASH_BYTES:
+        return EvidenceAnchor(
+            "local-file",
+            target,
+            "present-unhashed",
+            reference.position.line,
+            reference.position.column,
+            repository_path,
+            size_bytes=size,
+        )
+    return EvidenceAnchor(
+        "local-file",
+        target,
+        "present",
+        reference.position.line,
+        reference.position.column,
+        repository_path,
+        size_bytes=size,
+    )
+
+
 def _evidence_references(block: ProseBlock) -> list[EvidenceReference]:
     references: list[EvidenceReference] = []
     for match in MARKDOWN_LINK_PATTERN.finditer(block.raw_text):
@@ -447,7 +703,12 @@ def _evidence_references(block: ProseBlock) -> list[EvidenceReference]:
 
     for code_match in INLINE_CODE_PATTERN.finditer(block.raw_text):
         code = code_match.group("code")
-        if not (COMMAND_PATTERN.search(code) or PATH_TOKEN_PATTERN.fullmatch(code.strip())):
+        command = COMMAND_PATTERN.search(code)
+        contextual_path = (
+            PATH_TOKEN_PATTERN.fullmatch(code.strip())
+            and EVIDENCE_CUE_PATTERN.search(block.scan_text)
+        )
+        if not (command or contextual_path):
             continue
         for path_match in PATH_TOKEN_PATTERN.finditer(code):
             raw_index = code_match.start("code") + path_match.start("path")
@@ -459,7 +720,7 @@ def _evidence_references(block: ProseBlock) -> list[EvidenceReference]:
 def _reference_findings(
     blocks: list[ProseBlock],
     claim_blocks: set[int],
-    suppression_map: dict[int, set[str]],
+    suppression_map: dict[int, dict[str, str]],
     document: Path,
     root: Path,
     radius: int,
@@ -479,7 +740,7 @@ def _reference_findings(
                 issue = _reference_issue(reference, document, root)
                 if issue is None:
                     continue
-                block_suppressions = suppression_map.get(block_index, set())
+                block_suppressions = suppression_map.get(block_index, {})
                 if "CF005" in block_suppressions or "ALL" in block_suppressions:
                     suppressed += 1
                     continue
@@ -536,9 +797,11 @@ def _reference_supports_evidence(
 
 
 def _is_negated(text: str, start: int) -> bool:
-    prefix = text[max(0, start - 180):start]
+    prefix = re.sub(r"[*_~]+", " ", text[max(0, start - 180):start])
     immediate = re.search(
-        r"\b(?:not|isn['’]?t|aren['’]?t|doesn['’]?t|does\s+not|cannot|can['’]?t)\s+$",
+        r"\b(?:not|isn['’]?t|aren['’]?t|doesn['’]?t|does\s+not|cannot|can['’]?t)"
+        r"(?:\s+(?:fully|independently|externally|schema|described|presented|claimed|"
+        r"labelled|labeled|characterised|characterized|treated)(?:\s+as)?)?\s+$",
         prefix,
         re.I,
     )
@@ -550,16 +813,48 @@ def _is_negated(text: str, start: int) -> bool:
         re.I,
     )
     no_evidence = re.search(r"\bno\s+evidence\b[^.!?;]{0,130}$", prefix, re.I)
-    return bool(immediate or epistemic or no_evidence)
+    establishes_nothing = re.search(
+        r"\b(?:establish(?:es|ed)?|shows?|proves?|demonstrates?)\s+nothing\s+"
+        r"(?:about|that)\b[^.!?;]{0,130}$",
+        prefix,
+        re.I,
+    )
+    does_not_make = re.search(
+        r"\b(?:does\s+not|doesn['’]?t|cannot|can['’]?t)\s+"
+        r"(?:make|render|declare|consider)\b[^.!?;]{0,100}$",
+        prefix,
+        re.I,
+    )
+    not_a_synonym = re.search(
+        r"\b(?:is|are)\s+not\s+(?:a\s+)?(?:synonym|claim|statement|assertion)\s+"
+        r"(?:for|of)\s+$",
+        prefix,
+        re.I,
+    )
+    return bool(
+        immediate
+        or epistemic
+        or no_evidence
+        or establishes_nothing
+        or does_not_make
+        or not_a_synonym
+    )
 
 
 def _is_non_assurance_usage(rule_id: str, text: str, match: re.Match[str]) -> bool:
     if rule_id != "CF002":
         return False
     start = match.start()
-    prefix = text[max(0, start - 100):start]
+    prefix = re.sub(r"[*_~]+", " ", text[max(0, start - 120):start])
     if re.search(
         r"\b(?:needed|required|necessary|intended|used)\s+to\s+$",
+        prefix,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        r"\b(?:describ(?:e|es|ed|ing)|present(?:s|ed|ing)?|claim(?:s|ed|ing)?)\b"
+        r"[^.!?;]{0,70}\bas\s+$",
         prefix,
         re.IGNORECASE,
     ):
@@ -603,3 +898,17 @@ def _finding(
     material = f"{rule_id}\0{stable_path}\0{normalized}".encode()
     fingerprint = hashlib.sha256(material).hexdigest()[:16]
     return Finding(rule_id, severity, path, line, column, message, claim, suggestion, fingerprint)
+
+
+def _normalized_claim(claim: str) -> str:
+    return re.sub(r"\s+", " ", claim.strip().lower())
+
+
+def _claim_record_id(path: Path, claim: str, root: Path, occurrence: int) -> str:
+    normalized = _normalized_claim(claim)
+    try:
+        stable_path = path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        stable_path = path.name
+    material = f"{stable_path}\0{normalized}\0{occurrence}".encode()
+    return f"CLM-{hashlib.sha256(material).hexdigest()[:16]}"
