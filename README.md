@@ -71,15 +71,37 @@ jobs:
   claims:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: Dean00dev/ClaimFence@v0.1.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: Dean00dev/ClaimFence@v0.2.0
+        id: claimfence
         with:
           paths: README.md docs
           fail-on: warning
 ```
 
-The action emits native file-and-line annotations. ClaimFence can also produce JSON or
-SARIF for other automation:
+The action emits native file-and-line annotations and a Markdown workflow summary. It also
+exposes stable outputs for follow-on steps:
+
+| Output | Meaning |
+|---|---|
+| `files-scanned` | Markdown files examined |
+| `findings-count` | Findings remaining after baseline filtering |
+| `error-count`, `warning-count`, `info-count` | Findings by severity |
+| `suppressed-count`, `baselined-count` | Findings intentionally omitted |
+| `outcome` | `passed` or `failed` at the configured threshold |
+
+Existing projects can supply the same config and baseline used by the CLI:
+
+```yaml
+      - uses: Dean00dev/ClaimFence@v0.2.0
+        with:
+          paths: README.md docs
+          config: .claimfence.toml
+          baseline: .claimfence-baseline.json
+```
+
+For security-sensitive workflows, replace version tags with the full commit SHA you have
+reviewed. ClaimFence can also produce JSON or SARIF for other automation:
 
 ```bash
 claimfence . --format json --output claimfence.json
@@ -152,7 +174,7 @@ the bundled action.
 - Nearby evidence language may be weak, irrelevant, stale, or fabricated. A clean scan is
   not a factual audit.
 - A finding is a review prompt, not proof that the underlying system is unsafe.
-- Rule coverage is intentionally narrow in v0.1.0. Synonyms and domain-specific claims can
+- Rule coverage is intentionally narrow in v0.2.0. Synonyms and domain-specific claims can
   be missed.
 - English is the only supported prose language in this release.
 - Markdown rendered from templates or generated after the scan is outside the tested path.

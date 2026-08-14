@@ -8,7 +8,13 @@ import unittest
 from claimfence.baseline import apply_baseline, write_baseline
 from claimfence.config import Config, load_config
 from claimfence.models import Severity
-from claimfence.reporters import github_report, json_report, sarif_report
+from claimfence.reporters import (
+    github_output_report,
+    github_report,
+    github_summary,
+    json_report,
+    sarif_report,
+)
 from claimfence.scanner import scan_file, scan_paths
 
 
@@ -109,9 +115,15 @@ class ScannerTests(unittest.TestCase):
         parsed_json = json.loads(json_report(result))
         parsed_sarif = json.loads(sarif_report(result, Path.cwd()))
         annotations = github_report(result, Path.cwd())
+        summary = github_summary(result, Path.cwd(), Severity.WARNING)
+        outputs = github_output_report(result, Severity.WARNING)
         self.assertEqual("ClaimFence", parsed_json["tool"]["name"])
+        self.assertEqual("0.2.0", parsed_json["tool"]["version"])
         self.assertEqual("2.1.0", parsed_sarif["version"])
+        self.assertEqual("0.2.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
         self.assertIn("::error", annotations)
+        self.assertIn("### Findings by rule", summary)
+        self.assertIn("outcome=failed", outputs)
 
     def test_configuration_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

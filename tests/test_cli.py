@@ -47,6 +47,45 @@ class CliTests(unittest.TestCase):
                 main(["--version"])
         self.assertEqual(0, raised.exception.code)
 
+    def test_github_summary_and_outputs_are_written_before_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / "summary.md"
+            outputs = Path(directory) / "outputs.txt"
+            with redirect_stdout(StringIO()):
+                code = main([
+                    str(FIXTURES / "unbounded.md"),
+                    "--format", "github",
+                    "--github-summary", str(summary),
+                    "--github-output", str(outputs),
+                ])
+            summary_text = summary.read_text(encoding="utf-8")
+            output_values = dict(
+                line.split("=", 1)
+                for line in outputs.read_text(encoding="utf-8").splitlines()
+            )
+        self.assertEqual(1, code)
+        self.assertIn("## ClaimFence scan", summary_text)
+        self.assertIn("**Failed**", summary_text)
+        self.assertEqual("failed", output_values["outcome"])
+        self.assertGreater(int(output_values["findings-count"]), 0)
+
+    def test_report_only_outcome_passes_with_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            outputs = Path(directory) / "outputs.txt"
+            with redirect_stdout(StringIO()):
+                code = main([
+                    str(FIXTURES / "unbounded.md"),
+                    "--fail-on", "none",
+                    "--github-output", str(outputs),
+                    "--no-color",
+                ])
+            values = dict(
+                line.split("=", 1)
+                for line in outputs.read_text(encoding="utf-8").splitlines()
+            )
+        self.assertEqual(0, code)
+        self.assertEqual("passed", values["outcome"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,10 +4,18 @@ import argparse
 from pathlib import Path
 import sys
 
+from . import __version__
 from .baseline import apply_baseline, write_baseline
 from .config import load_config
 from .models import Severity
-from .reporters import github_report, json_report, sarif_report, text_report
+from .reporters import (
+    github_output_report,
+    github_report,
+    github_summary,
+    json_report,
+    sarif_report,
+    text_report,
+)
 from .scanner import scan_paths
 
 
@@ -23,8 +31,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fail-on", choices=("info", "warning", "error", "none"))
     parser.add_argument("--baseline", type=Path, help="ignore fingerprints in this baseline")
     parser.add_argument("--write-baseline", type=Path, help="write current finding fingerprints and exit")
+    parser.add_argument(
+        "--github-summary", type=Path, help="append a Markdown summary to this file"
+    )
+    parser.add_argument(
+        "--github-output", type=Path, help="append GitHub Action outputs to this file"
+    )
     parser.add_argument("--no-color", action="store_true", help="disable ANSI colour")
-    parser.add_argument("--version", action="version", version="claimfence 0.1.0")
+    parser.add_argument("--version", action="version", version=f"claimfence {__version__}")
     return parser
 
 
@@ -62,6 +76,18 @@ def main(argv: list[str] | None = None) -> int:
     elif report:
         print(report)
 
-    if config.fail_on is None:
-        return 0
-    return int(any(finding.severity >= config.fail_on for finding in result.findings))
+    try:
+        if args.github_summary:
+            _append(args.github_summary, github_summary(result, root, config.fail_on))
+        if args.github_output:
+            _append(args.github_output, github_output_report(result, config.fail_on))
+    except OSError as exc:
+        parser.exit(2, f"claimfence: {exc}\n")
+
+    return int(result.fails_at(config.fail_on))
+
+
+def _append(path: Path, content: str) -> None:
+    with path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(content)
+        stream.write("\n")

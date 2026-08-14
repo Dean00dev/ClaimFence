@@ -59,3 +59,8 @@ class ScanResult:
             severity.label(): sum(f.severity == severity for f in self.findings)
             for severity in Severity
         }
+
+    def fails_at(self, threshold: Severity | None) -> bool:
+        return threshold is not None and any(
+            finding.severity >= threshold for finding in self.findings
+        )

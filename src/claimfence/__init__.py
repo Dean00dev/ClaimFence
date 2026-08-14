@@ -1,7 +1,8 @@
 """ClaimFence: deterministic linting for evidence-bound documentation claims."""
 
+__version__ = "0.2.0"
+
 from .models import Finding, ScanResult, Severity
 from .scanner import scan_paths
 
-__all__ = ["Finding", "ScanResult", "Severity", "scan_paths"]
-__version__ = "0.1.0"
+__all__ = ["Finding", "ScanResult", "Severity", "__version__", "scan_paths"]

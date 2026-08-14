@@ -13,16 +13,65 @@ inputs:
     description: Lowest severity that fails the step (info, warning, error, none)
     required: false
     default: warning
+  config:
+    description: Optional path to a ClaimFence TOML configuration file
+    required: false
+    default: ""
+  baseline:
+    description: Optional path to a ClaimFence fingerprint baseline
+    required: false
+    default: ""
+outputs:
+  files-scanned:
+    description: Number of Markdown files scanned
+    value: ${{ steps.scan.outputs.files-scanned }}
+  findings-count:
+    description: Number of unbaselined findings
+    value: ${{ steps.scan.outputs.findings-count }}
+  error-count:
+    description: Number of error findings
+    value: ${{ steps.scan.outputs.error-count }}
+  warning-count:
+    description: Number of warning findings
+    value: ${{ steps.scan.outputs.warning-count }}
+  info-count:
+    description: Number of informational findings
+    value: ${{ steps.scan.outputs.info-count }}
+  suppressed-count:
+    description: Number of findings suppressed with a reason
+    value: ${{ steps.scan.outputs.suppressed-count }}
+  baselined-count:
+    description: Number of findings ignored by the baseline
+    value: ${{ steps.scan.outputs.baselined-count }}
+  outcome:
+    description: ClaimFence threshold outcome (passed or failed)
+    value: ${{ steps.scan.outputs.outcome }}
 runs:
   using: composite
   steps:
     - name: Run ClaimFence
+      id: scan
       shell: bash
       env:
         CLAIMFENCE_PATHS: ${{ inputs.paths }}
         CLAIMFENCE_FAIL_ON: ${{ inputs.fail-on }}
+        CLAIMFENCE_CONFIG: ${{ inputs.config }}
+        CLAIMFENCE_BASELINE: ${{ inputs.baseline }}
         CLAIMFENCE_ACTION_PATH: ${{ github.action_path }}
       run: |
         export PYTHONPATH="$CLAIMFENCE_ACTION_PATH/src${PYTHONPATH:+:$PYTHONPATH}"
         read -r -a claimfence_paths <<< "$CLAIMFENCE_PATHS"
-        python -m claimfence "${claimfence_paths[@]}" --format github --fail-on "$CLAIMFENCE_FAIL_ON"
+        claimfence_args=(
+          "${claimfence_paths[@]}"
+          --format github
+          --fail-on "$CLAIMFENCE_FAIL_ON"
+          --github-summary "$GITHUB_STEP_SUMMARY"
+          --github-output "$GITHUB_OUTPUT"
+        )
+        if [[ -n "$CLAIMFENCE_CONFIG" ]]; then
+          claimfence_args+=(--config "$CLAIMFENCE_CONFIG")
+        fi
+        if [[ -n "$CLAIMFENCE_BASELINE" ]]; then
+          claimfence_args+=(--baseline "$CLAIMFENCE_BASELINE")
+        fi
+        python -m claimfence "${claimfence_args[@]}"
