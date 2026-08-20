@@ -254,9 +254,9 @@ class ScannerTests(unittest.TestCase):
             (root / "docs").mkdir()
             (root / "tests").mkdir()
             receipt = root / "docs" / "receipt.md"
-            receipt.write_text("measured evidence\n", encoding="utf-8")
+            receipt.write_bytes(b"measured evidence\n")
             test_file = root / "tests" / "check.py"
-            test_file.write_text("assert True\n", encoding="utf-8")
+            test_file.write_bytes(b"assert True\n")
             readme = root / "README.md"
             readme.write_text(
                 "# Demo\n\n## Verification\n\n"
