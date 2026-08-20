@@ -4,4 +4,4 @@
   entry: claimfence
   language: python
   types: [markdown]
-  args: [--fail-on, warning]
+  args: [--fail-on, warning, --]

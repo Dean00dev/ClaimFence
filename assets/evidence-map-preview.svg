@@ -19,7 +19,7 @@
       <path d="M33 14 52 23v14c0 12-8 21-19 27C22 58 14 49 14 37V23z" fill="none" stroke="#20d9ff" stroke-width="4" filter="url(#glow)"/>
       <path d="m24 37 6 6 13-16" fill="none" stroke="#55e39b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
     </g>
-    <text x="146" y="71" fill="#20d9ff" font-size="15" font-weight="800" letter-spacing="2">CLAIMFENCE v0.4.0</text>
+    <text x="146" y="71" fill="#20d9ff" font-size="15" font-weight="800" letter-spacing="2">CLAIMFENCE v0.5.0</text>
     <text x="146" y="109" fill="#eef7ff" font-size="38" font-weight="800">Evidence Map</text>
     <text x="58" y="153" fill="#9eb2c7" font-size="17">Dogfood scan · Doorknob README · lexical review, not a factual audit</text>
 

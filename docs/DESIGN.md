@@ -54,6 +54,12 @@ For local evidence, `CF005` verifies that the path resolves inside the selected 
 root and exists. This is intentionally a floor: an empty or irrelevant file passes path
 integrity. ClaimFence does not fetch external URLs or authenticate any evidence.
 
+When a repository root is explicitly selected, every requested and discovered scan path is
+resolved and required to stay inside it. This includes Markdown files reached through
+symbolic links. The bundled Action always passes its configured root. For compatibility,
+an ad hoc CLI invocation without `--root` can still scan an explicitly named absolute file
+outside the working directory; the working directory remains its evidence-resolution root.
+
 Inline path-shaped examples are not evidence merely because they resemble a filename. A
 bare inline path is considered an anchor only beside an evidence cue; paths inside a
 recognized reproduction command remain anchors. This keeps examples such as `NUL.txt`
@@ -70,6 +76,31 @@ Ledger and HTML reporters enrich present local-file anchors with SHA-256 only wh
 those outputs is requested. The ordinary finding path therefore does not read linked
 evidence contents. Files larger than 16 MiB are not hashed. Generated HTML escapes all
 document-derived strings and contains only static reporter JavaScript.
+
+## Evidence Drift model
+
+Evidence Drift compares two structurally checked v1 claim ledgers by stable claim
+identifier. Source line and column changes are ignored. Repository-local anchors use their
+resolved repository-relative path as identity when available, so spelling-only changes
+such as `examples/bounded-readme.md` to `./examples/bounded-readme.md` do not create drift.
+
+The comparator emits deterministic added, removed, and changed events. Events requiring
+review include lost evidence, changed evidence state or bytes, lost context, increased
+severity, new suppression, and a current claim that is not `linked`. Additions and removals
+that do not meet those conditions remain visible as change-only events. The `any` gate is
+available when each inventory change should halt a workflow.
+
+The receipt records both tool versions, but a version difference is not itself a drift
+event. Claim rewrites normally appear as a removed identifier and an added identifier.
+These boundaries are explicit because the comparator detects state change; it does not
+infer whether the change improved or weakened the underlying evidence.
+
+For `present-unhashed` files above 16 MiB, the ledger retains size but no digest. A size
+change creates drift; a same-size byte change is outside the comparison model.
+
+Comparison ledgers are capped at 32 MiB and checked for schema version, producer,
+identifiers, consumed field types, allowed dispositions, and digest shape before use.
+GitHub summary values derived from ledgers are escaped and flattened to one line.
 
 ## Negation ordering
 

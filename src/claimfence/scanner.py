@@ -125,17 +125,29 @@ def scan_paths(
     paths: Iterable[Path],
     config: Config,
     root: Path | None = None,
+    *,
+    contain_to_root: bool | None = None,
 ) -> ScanResult:
     repository_root = (root or Path.cwd()).resolve()
     if not repository_root.is_dir():
         raise FileNotFoundError(f"repository root not found: {repository_root}")
+    if contain_to_root is None:
+        contain_to_root = root is not None
 
     result = ScanResult()
     requested = list(paths)
+    if contain_to_root:
+        requested = [
+            _require_within_root(path, repository_root) for path in requested
+        ]
     missing = [path for path in requested if not path.exists()]
     if missing:
         raise FileNotFoundError(f"path not found: {missing[0]}")
-    for path in _discover(requested, config.exclude):
+    for path in _discover(
+        requested,
+        config.exclude,
+        repository_root if contain_to_root else None,
+    ):
         result.files_scanned += 1
         file_scan = _scan_file_details(path, config, repository_root)
         result.findings.extend(file_scan.findings)
@@ -165,7 +177,12 @@ def scan_file(
     config: Config,
     root: Path | None = None,
 ) -> tuple[list[Finding], int]:
-    scan = _scan_file_details(path, config, (root or Path.cwd()).resolve())
+    repository_root = (root or Path.cwd()).resolve()
+    if root is not None:
+        path = _require_within_root(path, repository_root)
+    if not path.exists():
+        raise FileNotFoundError(f"path not found: {path}")
+    scan = _scan_file_details(path, config, repository_root)
     return scan.findings, scan.suppressed
 
 
@@ -175,6 +192,7 @@ def _scan_file_details(
     root: Path,
 ) -> _FileScan:
     repository_root = root.resolve()
+    path = path.resolve()
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
     blocks = _logical_blocks(lines)
@@ -348,21 +366,36 @@ def _scan_file_details(
     )
 
 
-def _discover(paths: Iterable[Path], excludes: list[str]) -> list[Path]:
+def _discover(paths: Iterable[Path], excludes: list[str], root: Path | None) -> list[Path]:
     discovered: set[Path] = set()
     for raw in paths:
-        path = raw.resolve()
+        path = _require_within_root(raw, root) if root is not None else raw.resolve()
         if path.is_file() and path.suffix.lower() in MARKDOWN_SUFFIXES:
             discovered.add(path)
         elif path.is_dir():
             for candidate in path.rglob("*"):
-                if not candidate.is_file() or candidate.suffix.lower() not in MARKDOWN_SUFFIXES:
+                if candidate.suffix.lower() not in MARKDOWN_SUFFIXES:
                     continue
                 relative = candidate.relative_to(path).as_posix()
                 if any(fnmatch.fnmatch(relative, pattern) for pattern in excludes):
                     continue
-                discovered.add(candidate.resolve())
+                resolved = (
+                    _require_within_root(candidate, root)
+                    if root is not None
+                    else candidate.resolve()
+                )
+                if resolved.is_file():
+                    discovered.add(resolved)
     return sorted(discovered)
+
+
+def _require_within_root(path: Path, root: Path) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise ValueError(f"scan path escapes the repository root: {path}") from exc
+    return resolved
 
 
 def _logical_blocks(lines: list[str]) -> list[ProseBlock]:
@@ -556,7 +589,10 @@ def _context_types(
     raw_context = "\n".join(block.raw_text for block in blocks)
     scan_context = "\n".join(block.scan_text for block in blocks)
     result: set[str] = set()
-    if any(term.lower() in raw_context.lower() for term in extra_evidence_terms) or any(
+    if any(
+        term.strip() and term.lower() in raw_context.lower()
+        for term in extra_evidence_terms
+    ) or any(
         _block_has_concrete_evidence(block, document, root) for block in blocks
     ):
         result.add("evidence")

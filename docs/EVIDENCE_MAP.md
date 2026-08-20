@@ -63,6 +63,11 @@ The output has no timestamp, host name, repository owner, branch name, or networ
 field. Identical scanned bytes, configuration, repository-local evidence bytes, and tool
 version produce identical ledger bytes.
 
+Starting in v0.5, a saved ledger can be compared with a later scan to produce a separate
+deterministic Evidence Drift receipt. See the
+[Evidence Drift contract](EVIDENCE_DRIFT.md) for event identities, gate semantics, and the
+trusted-ledger boundary.
+
 ## Optional signing with GitHub attestations
 
 The ledger is suitable as a custom predicate for GitHub's general-purpose attestation
@@ -78,7 +83,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-  - uses: Dean00dev/ClaimFence@v0.4.0
+  - uses: Dean00dev/ClaimFence@v0.5.0
     with:
       paths: README.md docs
       fail-on: none
@@ -86,7 +91,7 @@ steps:
   - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
     with:
       subject-path: dist/project.tar.gz
-      predicate-type: https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.4.0/schema/claim-ledger-v1.schema.json
+      predicate-type: https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/schema/claim-ledger-v1.schema.json
       predicate-path: claimfence-ledger.json
 ```
 
@@ -95,13 +100,17 @@ against the upstream release before adopting the pattern.
 
 ## Security boundary
 
-Scanned Markdown is untrusted input. Under v0.4.0's packaged scan and report paths,
-ClaimFence does not execute embedded code or commands, evaluate templates, fetch URLs,
-load repository modules, or include document text inside generated JavaScript. Inspect the
+Scanned Markdown and comparison ledgers are untrusted input. Under v0.5.0's packaged scan
+and report paths, ClaimFence does not execute embedded code or commands, evaluate templates,
+fetch URLs, or load repository modules. Explicit repository roots constrain requested and
+discovered scan files after symbolic-link resolution. Document-derived HTML and
+workflow-summary values are escaped. Comparison ledgers are structurally validated and
+limited to 32 MiB. Inspect the
 [`scanner`](../src/claimfence/scanner.py) and
-[`reporters`](../src/claimfence/reporters.py), then reproduce the adversarial fixtures with
+[`reporters`](../src/claimfence/reporters.py) plus the
+[`drift comparator`](../src/claimfence/drift.py), then reproduce the adversarial fixtures with
 `PYTHONPATH=src python -m unittest discover -s tests -v`. This boundary covers the cited
-v0.4.0 code and tests, not modified forks or future releases.
+v0.5.0 code and tests, not modified forks or future releases.
 
 An author can still evade a lexical rule, link irrelevant material, create a placeholder
 file, or provide a misleading suppression reason. The map makes those declarations visible;

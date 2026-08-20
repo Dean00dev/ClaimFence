@@ -12,9 +12,14 @@ CI repeats the suite on each supported Python version. The workflow run is the d
 receipt for a particular commit; this file is only the reproduction map.
 
 The suite includes adversarial cases for soft-wrapped negation, universal-negative claims,
-repository-root escapes, missing references, evidence-shaped filename examples, stable
-claim identifiers, suppression reasons, deterministic report bytes, local-file digests,
-and document-derived HTML injection.
+explicit and symbolic-link repository-root escapes, missing references, blank custom
+evidence terms, evidence-shaped filename examples, stable claim identifiers, suppression
+reasons, deterministic report bytes, local-file digests, bounded ledger loading, and
+document-derived HTML and workflow-summary injection.
+
+Evidence Drift tests additionally hold rewrapping stability, normalized local-link identity,
+byte and status changes, lost anchors, new claims, review and any gates, malformed ledgers,
+JSON receipts, and GitHub Action outputs stable.
 
 Generate the visual and machine-readable reports exercised by the suite:
 

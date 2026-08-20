@@ -53,10 +53,14 @@ def json_report(result: ScanResult) -> str:
 
 
 def ledger_report(result: ScanResult, root: Path) -> str:
+    return json.dumps(ledger_payload(result, root), indent=2, sort_keys=True)
+
+
+def ledger_payload(result: ScanResult, root: Path) -> dict[str, object]:
     claim_counts = result.claim_counts()
-    payload = {
+    return {
         "$schema": (
-            "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.4.0/"
+            "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/"
             "schema/claim-ledger-v1.schema.json"
         ),
         "schema_version": "1.0",
@@ -85,7 +89,6 @@ def ledger_report(result: ScanResult, root: Path) -> str:
             "Local SHA-256 digests establish byte identity only, not evidence quality.",
         ],
     }
-    return json.dumps(payload, indent=2, sort_keys=True)
 
 
 def html_report(result: ScanResult, root: Path) -> str:

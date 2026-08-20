@@ -35,7 +35,7 @@ version, test space, reproduction command, evidence location, and limitation.
 
 ## The Evidence Map
 
-ClaimFence v0.4 inventories every assurance claim it recognizes—not only the ones that
+ClaimFence v0.5 inventories every assurance claim it recognizes—not only the ones that
 fail—and maps each claim to its nearby scope, limitations, commands, URLs, and local
 evidence files. Local files receive a SHA-256 digest when the map is generated. The result
 is available as deterministic JSON and as a self-contained interactive HTML report.
@@ -58,6 +58,36 @@ The ledger follows the versioned
 [`claim-ledger-v1` schema](schema/claim-ledger-v1.schema.json). Commands are recorded but
 never executed, external URLs are recorded but never fetched, and local hashes establish
 byte identity rather than evidence quality. See the [Evidence Map contract](docs/EVIDENCE_MAP.md).
+
+## Evidence Drift
+
+**Your claim stayed the same. Did its evidence?**
+
+Evidence Drift compares a previous claim ledger with the current scan. It emits a
+deterministic receipt when a claim loses context, a hashed local evidence file changes
+bytes, an anchor disappears, a disposition changes, or the matched claim inventory changes.
+
+```bash
+# Keep this ledger from a trusted base revision or workflow run.
+claimfence README.md docs --root . --fail-on none \
+  --ledger-output previous-ledger.json
+
+# Compare a later revision and gate changes that require review.
+claimfence README.md docs --root . --fail-on none \
+  --compare-ledger previous-ledger.json \
+  --ledger-output current-ledger.json \
+  --drift-output claimfence-drift.json \
+  --fail-on-drift review
+```
+
+`review` fails on unresolved current claims, lost context or evidence, and changed recorded
+evidence state. `any` freezes the complete claim/evidence contract; `none` records drift
+without failing. Drift is a change signal, not a truth or evidence-quality verdict.
+Read the [Evidence Drift contract](docs/EVIDENCE_DRIFT.md) before using it as a gate.
+
+<p align="center">
+  <img src="assets/evidence-drift-preview.svg" width="100%" alt="Illustrative ClaimFence Evidence Drift receipt with review and change events">
+</p>
 
 ## Quick start
 
@@ -99,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: Dean00dev/ClaimFence@v0.4.0
+      - uses: Dean00dev/ClaimFence@v0.5.0
         id: claimfence
         with:
           paths: README.md docs
@@ -119,18 +149,28 @@ exposes stable outputs for follow-on steps:
 | `linked-claims-count`, `review-claims-count`, `suppressed-claims-count` | Claims by map status |
 | `evidence-anchors-count` | Distinct commands, URLs, and local references mapped to claims |
 | `outcome` | `passed`, `failed`, or `report-only` at the configured threshold |
+| `drift-configured` | Whether a previous ledger was supplied |
+| `drift-events-count`, `drift-claims-count` | Changed events and affected claims |
+| `drift-review-count` | Changed claims classified as requiring review |
+| `drift-outcome` | `not-configured`, `stable`, `changed`, or `failed` |
 
 Existing projects can supply the same config and baseline used by the CLI:
 
 ```yaml
-      - uses: Dean00dev/ClaimFence@v0.4.0
+      - uses: Dean00dev/ClaimFence@v0.5.0
         with:
           paths: README.md docs
           config: .claimfence.toml
           baseline: .claimfence-baseline.json
+          compare-ledger: previous-ledger.json
+          fail-on-drift: review
           ledger-output: claimfence-ledger.json
           html-output: claimfence-map.html
+          drift-output: claimfence-drift.json
 ```
+
+Supply `compare-ledger` from a protected base revision or trusted workflow artifact. The
+Action validates the ledger structure but does not authenticate who produced it.
 
 For security-sensitive workflows, replace version tags with the full commit SHA you have
 reviewed. ClaimFence can also produce JSON and SARIF from the same scan used for
@@ -211,8 +251,8 @@ Then make ClaimFence scan its own documentation:
 PYTHONPATH=src python -m claimfence . --no-color
 ```
 
-The CI workflow repeats both commands across Python 3.11, 3.12, and 3.13 and smoke-tests
-the bundled action.
+The CI workflow repeats both commands across Python 3.11 through 3.14 on Linux, with
+boundary coverage on macOS and Windows, then smoke-tests the wheel and bundled Action.
 
 ## Limitations and non-goals
 
@@ -227,11 +267,15 @@ the bundled action.
 - Nearby evidence may still be weak or unrelated. A clean scan is not a factual audit.
 - Evidence Map statuses are lexical dispositions, not confidence levels. There is no trust
   score, pass percentage, factual verdict, or certification.
+- Evidence Drift reports deterministic changes between ledgers. A review classification
+  is not proof that evidence weakened, and an unchanged receipt is not proof it stayed
+  relevant or sufficient.
 - Commands shown in the map are not executed. External URLs are not fetched. Local evidence
   files up to 16 MiB are hashed only while producing a ledger or HTML map; larger files are
-  marked present but unhashed.
+  marked present but unhashed, so same-size byte changes in those files are outside the
+  drift detector.
 - A finding is a review prompt, not proof that the underlying system is unsafe.
-- Rule coverage is intentionally narrow in v0.4.0. Synonyms and domain-specific claims can
+- Rule coverage is intentionally narrow in v0.5.0. Synonyms and domain-specific claims can
   be missed.
 - English is the only supported prose language in this release.
 - Markdown rendered from templates or generated after the scan is outside the tested path.
@@ -242,7 +286,7 @@ ClaimFence was conceived and directed by Dean Egan and implemented through an
 AI-assisted build workflow. Its design follows one principle: **a claim should
 expose the boundary of the evidence supporting it.**
 
-For v0.4.0, [runtime dependencies are empty](pyproject.toml) and the executable scan path
+For v0.5.0, [runtime dependencies are empty](pyproject.toml) and the executable scan path
 is inspectable in [`src/claimfence`](src/claimfence). Scanned documents are processed on
 the machine or CI runner invoking the command.
 
