@@ -91,9 +91,11 @@ that do not meet those conditions remain visible as change-only events. The `any
 available when each inventory change should halt a workflow.
 
 The receipt records both tool versions, but a version difference is not itself a drift
-event. Claim rewrites normally appear as a removed identifier and an added identifier.
-These boundaries are explicit because the comparator detects state change; it does not
-infer whether the change improved or weakened the underlying evidence.
+event. Unanchored claim rewrites normally appear as a removed identifier and an added
+identifier. An optional stable claim anchor derives identity from an author-selected value,
+allowing rewrites and file moves to remain joined while still producing review-classified
+field events. These boundaries are explicit because the comparator detects state change; it
+does not infer whether the change preserved meaning or improved the underlying evidence.
 
 For `present-unhashed` files above 16 MiB, the ledger retains size but no digest. A size
 change creates drift; a same-size byte change is outside the comparison model.

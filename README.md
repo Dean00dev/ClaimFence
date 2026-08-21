@@ -89,6 +89,29 @@ Read the [Evidence Drift contract](docs/EVIDENCE_DRIFT.md) before using it as a 
   <img src="assets/evidence-drift-preview.svg" width="100%" alt="Illustrative ClaimFence Evidence Drift receipt with review and change events">
 </p>
 
+## Stable Claim Anchors
+
+By default, ClaimFence derives a claim identifier from its repository path and normalized
+wording. That keeps ordinary rewrapping stable, but a deliberate rewrite or file move
+normally appears as one removed claim and one added claim.
+
+Version 0.6 adds an optional author-selected anchor for claims that need continuity:
+
+~~~markdown
+<!-- claimfence-id: gateway/readiness -->
+
+Under version 2, this gateway is hardened for the included malformed-token fixtures.
+~~~
+
+The value is recorded as `stable_id`, while the machine identifier remains a deterministic
+`CLM-…` digest. Rewriting or moving the anchored claim now produces review-classified
+`claim-field-changed` events instead of breaking its identity.
+
+Anchors must be unique across the scan, use 1–128 lowercase ASCII letters, digits, `.`,
+`_`, `:`, `/`, or `-`, and immediately precede exactly one recognized claim block.
+Malformed, duplicate, dangling, or ambiguous directives make the scan invalid rather than
+silently weakening drift. See the [Stable Claim Anchors contract](docs/CLAIM_ANCHORS.md).
+
 ## Quick start
 
 ClaimFence requires Python 3.11 or later and has no runtime dependencies.
@@ -129,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: Dean00dev/ClaimFence@v0.5.1
+      - uses: Dean00dev/ClaimFence@v0.6.0
         id: claimfence
         with:
           paths: README.md docs
@@ -157,7 +180,7 @@ exposes stable outputs for follow-on steps:
 Existing projects can supply the same config and baseline used by the CLI:
 
 ```yaml
-      - uses: Dean00dev/ClaimFence@v0.5.1
+      - uses: Dean00dev/ClaimFence@v0.6.0
         with:
           paths: README.md docs
           config: .claimfence.toml
@@ -270,12 +293,14 @@ boundary coverage on macOS and Windows, then smoke-tests the wheel and bundled A
 - Evidence Drift reports deterministic changes between ledgers. A review classification
   is not proof that evidence weakened, and an unchanged receipt is not proof it stayed
   relevant or sufficient.
+- A stable claim anchor declares continuity; it does not establish that a rewritten claim
+  has the same meaning. Text and path changes remain review-classified drift events.
 - Commands shown in the map are not executed. External URLs are not fetched. Local evidence
   files up to 16 MiB are hashed only while producing a ledger or HTML map; larger files are
   marked present but unhashed, so same-size byte changes in those files are outside the
   drift detector.
 - A finding is a review prompt, not proof that the underlying system is unsafe.
-- Rule coverage is intentionally narrow in v0.5.1. Synonyms and domain-specific claims can
+- Rule coverage is intentionally narrow in v0.6.0. Synonyms and domain-specific claims can
   be missed.
 - English is the only supported prose language in this release.
 - Markdown rendered from templates or generated after the scan is outside the tested path.
@@ -286,7 +311,7 @@ ClaimFence was conceived and directed by Dean Egan and implemented through an
 AI-assisted build workflow. Its design follows one principle: **a claim should
 expose the boundary of the evidence supporting it.**
 
-For v0.5.1, [runtime dependencies are empty](pyproject.toml) and the executable scan path
+For v0.6.0, [runtime dependencies are empty](pyproject.toml) and the executable scan path
 is inspectable in [`src/claimfence`](src/claimfence). Scanned documents are processed on
 the machine or CI runner invoking the command.
 

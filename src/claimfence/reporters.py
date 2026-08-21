@@ -60,7 +60,7 @@ def ledger_payload(result: ScanResult, root: Path) -> dict[str, object]:
     claim_counts = result.claim_counts()
     return {
         "$schema": (
-            "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/"
+            "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.6.0/"
             "schema/claim-ledger-v1.schema.json"
         ),
         "schema_version": "1.0",
@@ -339,7 +339,7 @@ def github_output_report(result: ScanResult, fail_on: Severity | None) -> str:
 
 
 def _claim_payload(claim: ClaimRecord, root: Path) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "id": claim.claim_id,
         "rules": list(claim.rule_ids),
         "severity": claim.severity.label(),
@@ -356,6 +356,9 @@ def _claim_payload(claim: ClaimRecord, root: Path) -> dict[str, object]:
         "suppression_reasons": list(claim.suppression_reasons),
         "evidence": [_anchor_payload(anchor, root) for anchor in claim.evidence],
     }
+    if claim.explicit_id is not None:
+        payload["stable_id"] = claim.explicit_id
+    return payload
 
 
 def _evidence_count(result: ScanResult) -> int:
@@ -393,6 +396,8 @@ def _claim_html(claim: ClaimRecord, root: Path) -> str:
             "<small>No command, URL, or repository-local evidence reference was detected nearby.</small></div>"
         )
     source = f"{_relative(claim.path, root)}:{claim.line}:{claim.column} · {claim.claim_id}"
+    if claim.explicit_id is not None:
+        source += f" · stable-id {claim.explicit_id}"
     return (
         f'<article class="claim claim-{claim.status}" data-status="{claim.status}">'
         '<div class="claim-head"><div>'

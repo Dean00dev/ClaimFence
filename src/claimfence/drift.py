@@ -8,10 +8,11 @@ import re
 from typing import Any
 
 from . import __version__
+from .models import stable_claim_id
 
 
 DRIFT_SCHEMA = (
-    "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/"
+    "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.6.0/"
     "schema/evidence-drift-v1.schema.json"
 )
 EVENT_KINDS = (
@@ -24,6 +25,7 @@ EVENT_KINDS = (
 )
 _EVENT_ORDER = {kind: index for index, kind in enumerate(EVENT_KINDS)}
 _CLAIM_ID = re.compile(r"^CLM-[0-9a-f]{16}$")
+_STABLE_ID = re.compile(r"^[a-z0-9][a-z0-9._:/-]{0,127}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SEVERITY_RANK = {"info": 1, "warning": 2, "error": 3}
 _ANCHOR_KINDS = {"command", "external-url", "local-file", "local-path"}
@@ -103,6 +105,13 @@ def validate_ledger(payload: object, *, source: str = "claim ledger") -> None:
             raise ValueError(f"{label} has an invalid severity")
         if claim["status"] not in {"linked", "review", "suppressed"}:
             raise ValueError(f"{label} has an invalid status")
+        stable_id = claim.get("stable_id")
+        if stable_id is not None and (
+            not isinstance(stable_id, str) or not _STABLE_ID.fullmatch(stable_id)
+        ):
+            raise ValueError(f"{label} has an invalid stable_id")
+        if stable_id is not None and claim_id != stable_claim_id(stable_id):
+            raise ValueError(f"{label} stable_id does not match id")
         _string_array(
             claim.get("rules"),
             f"{label} rules",
@@ -253,7 +262,8 @@ def compare_ledgers(
             "Drift is a change signal, not a truth or quality verdict.",
             "A changed local digest establishes different bytes, not weaker evidence.",
             "Same-size byte changes in present-unhashed files cannot be detected.",
-            "Claim rewrites normally appear as one removed claim and one added claim.",
+            "Unanchored claim rewrites normally appear as one removed claim and one added claim.",
+            "A stable claimfence-id can preserve identity across deliberate rewrites or moves.",
             "Tool-version changes can alter lexical matches and should be reviewed separately.",
             "External URLs and recorded commands remain unfetched and unexecuted.",
         ],
@@ -276,8 +286,11 @@ def drift_text_report(payload: dict[str, Any]) -> str:
     for event in payload["events"][:20]:
         field = f" {event['field']}" if event.get("field") else ""
         marker = "review" if event["review_required"] else "change"
+        stable_id = (
+            f" stable-id={event['stable_id']}" if event.get("stable_id") else ""
+        )
         lines.append(
-            f"  {marker}: {event['kind']}{field} {event['claim_id']} "
+            f"  {marker}: {event['kind']}{field} {event['claim_id']}{stable_id} "
             f"{_single_line(event['path'])}"
         )
     remaining = summary["events"] - min(summary["events"], 20)
@@ -322,9 +335,15 @@ def drift_github_summary(payload: dict[str, Any]) -> str:
                 f" · {_github_code(event['field'])}" if event.get("field") else ""
             )
             marker = "review" if event["review_required"] else "change"
+            stable_id = (
+                f" · stable-id {_github_code(event['stable_id'])}"
+                if event.get("stable_id")
+                else ""
+            )
             lines.append(
                 f"- **{marker.upper()}** {_github_code(event['kind'])}{field} — "
                 f"{_github_code(event['path'])} · {_github_code(event['claim_id'])}"
+                f"{stable_id}"
             )
     else:
         lines.extend(["", "No claim or evidence drift was detected."])
@@ -543,6 +562,8 @@ def _event(
         "before": before,
         "after": after,
     }
+    if "stable_id" in claim:
+        event["stable_id"] = claim["stable_id"]
     if field is not None:
         event["field"] = field
     if anchor is not None:
@@ -551,13 +572,16 @@ def _event(
 
 
 def _claim_summary(claim: dict[str, Any]) -> dict[str, Any]:
-    return {
+    summary = {
         "rules": claim["rules"],
         "severity": claim["severity"],
         "status": claim["status"],
         "context": claim["context"],
         "evidence_anchors": len(claim["evidence"]),
     }
+    if "stable_id" in claim:
+        summary["stable_id"] = claim["stable_id"]
+    return summary
 
 
 def _event_sort_key(event: dict[str, Any]) -> tuple[object, ...]:

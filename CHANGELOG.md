@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 - 2026-08-21
+
+- Add optional stable claim anchors with the one-line
+  `<!-- claimfence-id: ... -->` directive.
+- Preserve a claim's deterministic ledger identity across deliberate wording changes and
+  Markdown file moves, allowing Evidence Drift to emit field-level review events.
+- Record the author-selected value as `stable_id` in ledgers, drift events, and Evidence
+  Map source labels.
+- Reject malformed, duplicate, dangling, displaced, and multi-claim anchor ambiguity; ignore
+  directive-shaped examples inside fenced, indented, or inline code.
+- Keep v1 ledger comparison compatible with older receipts that have no `stable_id`.
+
 ## 0.5.1 - 2026-08-21
 
 - Correct release provenance after the published `v0.5.0` tag targeted the prior v0.4

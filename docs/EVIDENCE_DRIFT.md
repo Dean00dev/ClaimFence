@@ -66,8 +66,13 @@ either configured gate fires and `2` when comparison input or configuration is i
 ## Stability boundary
 
 Claims are joined by their `CLM-…` identifier. Rewrapping ordinary prose and inserting an
-unrelated block do not change that identifier. A rewritten claim normally appears as one
-removed claim and one added claim, so use `any` if wording changes should halt the workflow.
+unrelated block do not change that identifier. An unanchored rewrite normally appears as one
+removed claim and one added claim, so use `any` if every inventory change should halt the
+workflow.
+
+An optional `<!-- claimfence-id: ... -->` directive preserves identity through deliberate
+rewrites and file moves. Those changes become review-classified `path` and `text` field
+events. Read the [Stable Claim Anchors contract](CLAIM_ANCHORS.md) before assigning IDs.
 
 Source line and column are deliberately ignored. Repository-local anchors use a resolved
 repository-relative identity where available, which makes `examples/bounded-readme.md` and
@@ -92,7 +97,7 @@ types, dispositions, evidence states, and digest shape before comparison. Input 
 The GitHub Action accepts the same options:
 
 ```yaml
-- uses: Dean00dev/ClaimFence@v0.5.1
+- uses: Dean00dev/ClaimFence@v0.6.0
   id: claimfence
   with:
     paths: README.md docs
@@ -113,6 +118,7 @@ later steps.
 - Equal bytes do not imply current, relevant, or sufficient evidence.
 - Files above 16 MiB have size but no digest, so a same-size byte change is not observable.
 - An added linked claim is still a lexical disposition, not a factual conclusion.
+- A retained stable ID declares intended continuity, not semantic equivalence.
 - A stable receipt covers only the selected paths, configuration, ledger fields, and tool
   behavior.
 - External URLs remain unfetched, and commands remain unexecuted.
