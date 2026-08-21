@@ -141,6 +141,151 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(2, len(result.claims))
         self.assertEqual(2, len({claim.claim_id for claim in result.claims}))
 
+    def test_explicit_claim_id_is_stable_and_recorded_in_ledger(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "<!-- claimfence-id: gateway/readiness -->\n\n"
+                "This gateway is production-ready.\n",
+                encoding="utf-8",
+            )
+            first = scan_paths([path], Config(), root)
+            path.write_text(
+                "<!-- claimfence-id: gateway/readiness -->\n\n"
+                "Under version 2, this gateway is hardened.\n",
+                encoding="utf-8",
+            )
+            second = scan_paths([path], Config(), root)
+            payload = json.loads(ledger_report(second, root))
+
+        self.assertEqual(first.claims[0].claim_id, second.claims[0].claim_id)
+        self.assertEqual("gateway/readiness", second.claims[0].explicit_id)
+        self.assertEqual("gateway/readiness", payload["claims"][0]["stable_id"])
+
+    def test_duplicate_explicit_claim_ids_across_files_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            first = root / "first.md"
+            second = root / "second.md"
+            content = (
+                "<!-- claimfence-id: shared-boundary -->\n\n"
+                "This gateway is secure.\n"
+            )
+            first.write_text(content, encoding="utf-8")
+            second.write_text(content, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "duplicate claimfence-id"):
+                scan_paths([first, second], Config(), root)
+
+    def test_explicit_claim_id_rejects_ambiguous_multi_claim_block(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "<!-- claimfence-id: ambiguous -->\n\n"
+                "This gateway is secure. It never stores secrets.\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "applies to multiple claims"):
+                scan_paths([path], Config(), root)
+
+    def test_invalid_and_dangling_explicit_claim_ids_are_rejected(self) -> None:
+        cases = (
+            (
+                "<!-- claimfence-id: Upper Case -->\n\nThis gateway is secure.\n",
+                "invalid claimfence-id",
+            ),
+            (
+                "<!-- claimfence-id: unused -->\n\nOrdinary documentation.\n",
+                "does not precede a recognized assurance claim",
+            ),
+        )
+        for content, message in cases:
+            with self.subTest(message=message):
+                with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+                    root = Path(directory)
+                    path = root / "README.md"
+                    path.write_text(content, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, message):
+                        scan_paths([path], Config(), root)
+
+    def test_explicit_claim_id_cannot_cross_ignored_code(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "<!-- claimfence-id: misplaced -->\n\n"
+                "~~~text\nignored example\n~~~\n\n"
+                "This deployment is secure.\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "must immediately precede"):
+                scan_paths([path], Config(), root)
+
+    def test_explicit_claim_id_can_precede_a_reasoned_suppression(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "<!-- claimfence-id: product/name -->\n"
+                "<!-- claimfence-disable-next-line CF002: literal product name -->\n"
+                "The Secure Gateway API accepts a token.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([path], Config(), root)
+
+        self.assertEqual("product/name", result.claims[0].explicit_id)
+        self.assertEqual("suppressed", result.claims[0].status)
+
+    def test_claimfence_id_example_inside_fence_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "~~~markdown\n"
+                "<!-- claimfence-id: example-only -->\n"
+                "This gateway is secure.\n"
+                "~~~\n\n"
+                "This deployment is secure.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([path], Config(), root)
+
+        self.assertEqual(1, len(result.claims))
+        self.assertIsNone(result.claims[0].explicit_id)
+
+    def test_claimfence_id_example_inside_indented_code_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "    <!-- claimfence-id: example-only -->\n"
+                "    This gateway is secure.\n\n"
+                "This deployment is secure.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([path], Config(), root)
+
+        self.assertEqual(1, len(result.claims))
+        self.assertIsNone(result.claims[0].explicit_id)
+
+    def test_claimfence_id_example_inside_inline_code_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "Document `<!-- claimfence-id: example-only -->` as syntax.\n\n"
+                "This deployment is secure.\n",
+                encoding="utf-8",
+            )
+            result = scan_paths([path], Config(), root)
+
+        self.assertEqual(1, len(result.claims))
+        self.assertIsNone(result.claims[0].explicit_id)
+
     def test_universal_negative_is_an_assurance_finding(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
@@ -485,9 +630,9 @@ class ScannerTests(unittest.TestCase):
         summary = github_summary(result, Path.cwd(), Severity.WARNING)
         outputs = github_output_report(result, Severity.WARNING)
         self.assertEqual("ClaimFence", parsed_json["tool"]["name"])
-        self.assertEqual("0.5.1", parsed_json["tool"]["version"])
+        self.assertEqual("0.6.0", parsed_json["tool"]["version"])
         self.assertEqual("2.1.0", parsed_sarif["version"])
-        self.assertEqual("0.5.1", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
+        self.assertEqual("0.6.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
         self.assertIn("::error", annotations)
         self.assertIn("### Findings by rule", summary)
         self.assertIn("outcome=failed", outputs)

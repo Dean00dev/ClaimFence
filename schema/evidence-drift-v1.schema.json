@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/schema/evidence-drift-v1.schema.json",
+  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.6.0/schema/evidence-drift-v1.schema.json",
   "title": "ClaimFence evidence drift receipt",
   "description": "A deterministic comparison of two ClaimFence v1 claim ledgers.",
   "type": "object",
   "required": ["$schema", "schema_version", "tool", "previous", "current", "summary", "events", "interpretation", "limitations"],
   "properties": {
-    "$schema": {"const": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/schema/evidence-drift-v1.schema.json"},
+    "$schema": {"const": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.6.0/schema/evidence-drift-v1.schema.json"},
     "schema_version": {"const": "1.0"},
     "tool": {
       "type": "object",
@@ -52,6 +52,7 @@
         "properties": {
           "kind": {"enum": ["claim-added", "claim-removed", "claim-field-changed", "evidence-added", "evidence-removed", "evidence-changed"]},
           "claim_id": {"type": "string", "pattern": "^CLM-[0-9a-f]{16}$"},
+          "stable_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:/-]{0,127}$"},
           "path": {"type": "string"},
           "text": {"type": "string"},
           "review_required": {"type": "boolean"},

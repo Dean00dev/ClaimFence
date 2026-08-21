@@ -45,19 +45,64 @@ class DriftTests(unittest.TestCase):
         self.assertEqual(1, drift["summary"]["stable_claims"])
         self.assertFalse(drift_fails(drift, "any"))
 
-    def test_v04_ledger_can_seed_v05_comparison(self) -> None:
+    def test_stable_claim_anchor_tracks_rewrite_and_file_move(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            original = root / "docs" / "assurance.md"
+            original.parent.mkdir()
+            original.write_text(
+                "<!-- claimfence-id: gateway/readiness -->\n\n"
+                "Under version 1, this gateway is production-ready.\n",
+                encoding="utf-8",
+            )
+            previous = ledger_payload(scan_paths([original], Config(), root), root)
+
+            moved = root / "guides" / "deployment.md"
+            moved.parent.mkdir()
+            original.rename(moved)
+            moved.write_text(
+                "<!-- claimfence-id: gateway/readiness -->\n\n"
+                "Under version 2, this gateway is hardened.\n",
+                encoding="utf-8",
+            )
+            current = ledger_payload(scan_paths([moved], Config(), root), root)
+
+        self.assertEqual(
+            previous["claims"][0]["id"],
+            current["claims"][0]["id"],
+        )
+        drift = compare_ledgers(previous, current)
+        kinds = {event["kind"] for event in drift["events"]}
+        fields = {
+            event.get("field")
+            for event in drift["events"]
+            if event["kind"] == "claim-field-changed"
+        }
+        self.assertNotIn("claim-added", kinds)
+        self.assertNotIn("claim-removed", kinds)
+        self.assertEqual({"path", "text"}, fields)
+        self.assertTrue(
+            all(event["stable_id"] == "gateway/readiness" for event in drift["events"])
+        )
+        self.assertIn("stable-id=gateway/readiness", drift_text_report(drift))
+        self.assertIn(
+            "stable-id <code>gateway/readiness</code>",
+            drift_github_summary(drift),
+        )
+
+    def test_v04_ledger_can_seed_v06_comparison(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
             readme, _ = self._project(root)
             current = self._ledger(root, readme)
         previous = deepcopy(current)
         previous["tool"]["version"] = "0.4.0"
-        previous["$schema"] = previous["$schema"].replace("v0.5.1", "v0.4.0")
+        previous["$schema"] = previous["$schema"].replace("v0.6.0", "v0.4.0")
 
         drift = compare_ledgers(previous, current)
         self.assertEqual(0, drift["summary"]["events"])
         self.assertEqual("0.4.0", drift["previous"]["tool_version"])
-        self.assertEqual("0.5.1", drift["current"]["tool_version"])
+        self.assertEqual("0.6.0", drift["current"]["tool_version"])
 
     def test_changed_evidence_bytes_require_review(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
@@ -163,6 +208,22 @@ class DriftTests(unittest.TestCase):
         duplicate["summary"]["claims_detected"] = 2
         with self.assertRaisesRegex(ValueError, "duplicate claim id"):
             validate_ledger(duplicate)
+
+    def test_ledger_validation_rejects_invalid_or_mismatched_stable_ids(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            readme, _ = self._project(root)
+            ledger = self._ledger(root, readme)
+
+        malformed = deepcopy(ledger)
+        malformed["claims"][0]["stable_id"] = "Upper Case"
+        with self.assertRaisesRegex(ValueError, "invalid stable_id"):
+            validate_ledger(malformed)
+
+        mismatched = deepcopy(ledger)
+        mismatched["claims"][0]["stable_id"] = "gateway/readiness"
+        with self.assertRaisesRegex(ValueError, "stable_id does not match id"):
+            validate_ledger(mismatched)
 
     def test_ledger_validation_rejects_malformed_evidence_digest(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
