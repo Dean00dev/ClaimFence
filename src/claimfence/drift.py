@@ -11,7 +11,7 @@ from . import __version__
 
 
 DRIFT_SCHEMA = (
-    "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/"
+    "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/"
     "schema/evidence-drift-v1.schema.json"
 )
 EVENT_KINDS = (

@@ -92,7 +92,7 @@ types, dispositions, evidence states, and digest shape before comparison. Input 
 The GitHub Action accepts the same options:
 
 ```yaml
-- uses: Dean00dev/ClaimFence@v0.5.0
+- uses: Dean00dev/ClaimFence@v0.5.1
   id: claimfence
   with:
     paths: README.md docs
