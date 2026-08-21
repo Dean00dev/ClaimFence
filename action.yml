@@ -41,6 +41,18 @@ inputs:
     description: Optional path for the self-contained interactive evidence map
     required: false
     default: ""
+  compare-ledger:
+    description: Optional previous claim ledger to compare with the current scan
+    required: false
+    default: ""
+  drift-output:
+    description: Optional path for the deterministic evidence-drift JSON receipt
+    required: false
+    default: ""
+  fail-on-drift:
+    description: Evidence-drift gate (none, review, or any)
+    required: false
+    default: none
 outputs:
   files-scanned:
     description: Number of Markdown files scanned
@@ -81,6 +93,21 @@ outputs:
   outcome:
     description: ClaimFence threshold outcome (passed, failed, or report-only)
     value: ${{ steps.scan.outputs.outcome }}
+  drift-configured:
+    description: Whether a previous evidence ledger was supplied
+    value: ${{ steps.scan.outputs.drift-configured }}
+  drift-events-count:
+    description: Number of deterministic claim and evidence drift events
+    value: ${{ steps.scan.outputs.drift-events-count }}
+  drift-claims-count:
+    description: Number of claims touched by drift events
+    value: ${{ steps.scan.outputs.drift-claims-count }}
+  drift-review-count:
+    description: Number of changed claims requiring review
+    value: ${{ steps.scan.outputs.drift-review-count }}
+  drift-outcome:
+    description: Drift outcome (not-configured, stable, changed, or failed)
+    value: ${{ steps.scan.outputs.drift-outcome }}
 runs:
   using: composite
   steps:
@@ -97,15 +124,18 @@ runs:
         CLAIMFENCE_SARIF_OUTPUT: ${{ inputs.sarif-output }}
         CLAIMFENCE_LEDGER_OUTPUT: ${{ inputs.ledger-output }}
         CLAIMFENCE_HTML_OUTPUT: ${{ inputs.html-output }}
+        CLAIMFENCE_COMPARE_LEDGER: ${{ inputs.compare-ledger }}
+        CLAIMFENCE_DRIFT_OUTPUT: ${{ inputs.drift-output }}
+        CLAIMFENCE_FAIL_ON_DRIFT: ${{ inputs.fail-on-drift }}
         CLAIMFENCE_ACTION_PATH: ${{ github.action_path }}
       run: |
         export PYTHONPATH="$CLAIMFENCE_ACTION_PATH/src${PYTHONPATH:+:$PYTHONPATH}"
         read -r -a claimfence_paths <<< "$CLAIMFENCE_PATHS"
         claimfence_args=(
-          "${claimfence_paths[@]}"
           --format github
           --fail-on "$CLAIMFENCE_FAIL_ON"
           --root "$CLAIMFENCE_ROOT"
+          --fail-on-drift "$CLAIMFENCE_FAIL_ON_DRIFT"
           --github-summary "$GITHUB_STEP_SUMMARY"
           --github-output "$GITHUB_OUTPUT"
         )
@@ -127,4 +157,11 @@ runs:
         if [[ -n "$CLAIMFENCE_HTML_OUTPUT" ]]; then
           claimfence_args+=(--html-output "$CLAIMFENCE_HTML_OUTPUT")
         fi
+        if [[ -n "$CLAIMFENCE_COMPARE_LEDGER" ]]; then
+          claimfence_args+=(--compare-ledger "$CLAIMFENCE_COMPARE_LEDGER")
+        fi
+        if [[ -n "$CLAIMFENCE_DRIFT_OUTPUT" ]]; then
+          claimfence_args+=(--drift-output "$CLAIMFENCE_DRIFT_OUTPUT")
+        fi
+        claimfence_args+=(-- "${claimfence_paths[@]}")
         python -m claimfence "${claimfence_args[@]}"

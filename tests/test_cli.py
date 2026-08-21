@@ -67,6 +67,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("## ClaimFence scan", summary_text)
         self.assertIn("**Failed**", summary_text)
         self.assertEqual("failed", output_values["outcome"])
+        self.assertEqual("not-configured", output_values["drift-outcome"])
         self.assertGreater(int(output_values["findings-count"]), 0)
 
     def test_report_only_outcome_is_explicit_with_findings(self) -> None:
@@ -146,6 +147,23 @@ class CliTests(unittest.TestCase):
             )
             with redirect_stdout(StringIO()):
                 code = main(["README.md", "--root", str(root), "--no-color"])
+        self.assertEqual(0, code)
+
+    def test_option_terminator_allows_dash_prefixed_scan_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "--version.md").write_text("# Demo\n", encoding="utf-8")
+            with redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "--root",
+                        str(root),
+                        "--fail-on",
+                        "none",
+                        "--",
+                        "--version.md",
+                    ]
+                )
         self.assertEqual(0, code)
 
 

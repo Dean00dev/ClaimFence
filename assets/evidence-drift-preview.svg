@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">ClaimFence Evidence Drift preview</title>
+  <desc id="desc">A dark deterministic receipt showing three claim and evidence changes, two requiring review.</desc>
+  <defs>
+    <linearGradient id="drift-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111b"/>
+      <stop offset="1" stop-color="#12263a"/>
+    </linearGradient>
+    <linearGradient id="drift-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#20d9ff"/>
+      <stop offset="1" stop-color="#a98bff"/>
+    </linearGradient>
+    <filter id="drift-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" rx="28" fill="url(#drift-bg)"/>
+  <circle cx="1120" cy="-45" r="280" fill="#a98bff" opacity=".055"/>
+  <path d="M58 158H1142" stroke="url(#drift-line)" stroke-width="2" opacity=".55"/>
+  <g font-family="Inter, ui-sans-serif, system-ui, sans-serif">
+    <g transform="translate(58 42)">
+      <rect width="66" height="66" rx="18" fill="#0e2635" stroke="#2e6076"/>
+      <path d="M33 14 52 23v14c0 12-8 21-19 27C22 58 14 49 14 37V23z" fill="none" stroke="#20d9ff" stroke-width="4" filter="url(#drift-glow)"/>
+      <path d="M22 42h8l6-15 6 15h8" fill="none" stroke="#a98bff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="146" y="66" fill="#20d9ff" font-size="15" font-weight="800" letter-spacing="2">CLAIMFENCE v0.5.0</text>
+    <text x="146" y="106" fill="#eef7ff" font-size="38" font-weight="800">Evidence Drift</text>
+    <text x="806" y="66" fill="#9eb2c7" font-size="13">LEDGER TOOLS</text>
+    <text x="806" y="94" fill="#eef7ff" font-size="17" font-weight="700">0.4.0</text>
+    <text x="871" y="94" fill="#20d9ff" font-size="20">→</text>
+    <text x="912" y="94" fill="#eef7ff" font-size="17" font-weight="700">0.5.0</text>
+
+    <g transform="translate(58 184)">
+      <g>
+        <rect width="252" height="82" rx="14" fill="#0d1b2a" stroke="#24364a"/>
+        <text x="18" y="28" fill="#9eb2c7" font-size="13">DRIFT EVENTS</text>
+        <text x="18" y="63" fill="#eef7ff" font-size="30" font-weight="800">3</text>
+      </g>
+      <g transform="translate(270)">
+        <rect width="252" height="82" rx="14" fill="#0d1b2a" stroke="#24364a"/>
+        <text x="18" y="28" fill="#9eb2c7" font-size="13">CLAIMS CHANGED</text>
+        <text x="18" y="63" fill="#eef7ff" font-size="30" font-weight="800">3</text>
+      </g>
+      <g transform="translate(540)">
+        <rect width="252" height="82" rx="14" fill="#251b16" stroke="#80552a"/>
+        <text x="18" y="28" fill="#d5ae81" font-size="13">REQUIRE REVIEW</text>
+        <text x="18" y="63" fill="#ffca6a" font-size="30" font-weight="800">2</text>
+      </g>
+      <g transform="translate(810)">
+        <rect width="274" height="82" rx="14" fill="#101d2d" stroke="#31465d"/>
+        <text x="18" y="28" fill="#9eb2c7" font-size="13">STABLE CLAIMS</text>
+        <text x="18" y="63" fill="#55e39b" font-size="30" font-weight="800">4</text>
+      </g>
+    </g>
+
+    <g transform="translate(58 286)">
+      <g>
+        <rect width="1084" height="82" rx="13" fill="#0d1b2a" stroke="#725a27"/>
+        <rect width="5" height="82" rx="3" fill="#ffca6a"/>
+        <rect x="20" y="16" width="72" height="24" rx="12" fill="#2a2112" stroke="#ffca6a"/>
+        <text x="34" y="32" fill="#ffca6a" font-size="11" font-weight="800">REVIEW</text>
+        <text x="112" y="33" fill="#eef7ff" font-size="16" font-weight="750">Evidence bytes changed</text>
+        <text x="112" y="60" fill="#9eb2c7" font-size="13">docs/receipt.md · SHA-256 5ea1… → a942…</text>
+        <text x="906" y="48" fill="#bcd2e8" font-family="ui-monospace, monospace" font-size="12">CLM-84fe2c71…</text>
+      </g>
+      <g transform="translate(0 94)">
+        <rect width="1084" height="82" rx="13" fill="#0d1b2a" stroke="#725a27"/>
+        <rect width="5" height="82" rx="3" fill="#ffca6a"/>
+        <rect x="20" y="16" width="72" height="24" rx="12" fill="#2a2112" stroke="#ffca6a"/>
+        <text x="34" y="32" fill="#ffca6a" font-size="11" font-weight="800">REVIEW</text>
+        <text x="112" y="33" fill="#eef7ff" font-size="16" font-weight="750">Evidence anchor removed</text>
+        <text x="112" y="60" fill="#9eb2c7" font-size="13">tests/integration.md · local-reference</text>
+        <text x="906" y="48" fill="#bcd2e8" font-family="ui-monospace, monospace" font-size="12">CLM-a31d9b06…</text>
+      </g>
+      <g transform="translate(0 188)">
+        <rect width="1084" height="82" rx="13" fill="#0d1b2a" stroke="#315c55"/>
+        <rect width="5" height="82" rx="3" fill="#55e39b"/>
+        <rect x="20" y="16" width="72" height="24" rx="12" fill="#112820" stroke="#55e39b"/>
+        <text x="31" y="32" fill="#55e39b" font-size="11" font-weight="800">CHANGE</text>
+        <text x="112" y="33" fill="#eef7ff" font-size="16" font-weight="750">Linked claim added</text>
+        <text x="112" y="60" fill="#9eb2c7" font-size="13">docs/release.md · claim-added</text>
+        <text x="906" y="48" fill="#bcd2e8" font-family="ui-monospace, monospace" font-size="12">CLM-f0a72d44…</text>
+      </g>
+    </g>
+
+    <rect x="58" y="582" width="1084" height="30" rx="15" fill="#101c2a" stroke="#2c4258"/>
+    <text x="600" y="602" text-anchor="middle" fill="#b8cbe0" font-size="12" font-weight="750" letter-spacing="1">DETERMINISTIC CHANGE SIGNAL · NOT A TRUTH OR QUALITY VERDICT</text>
+  </g>
+</svg>

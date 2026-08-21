@@ -8,5 +8,12 @@ Do not include confidential documents, credentials, personal data, or active exp
 in a public issue. Ordinary false positives and missed phrases are correctness bugs and may
 be reported publicly.
 
-Version 0.1.x is an early prototype. It is not a security control and a clean scan is not a
-security assessment.
+All v0.x releases are alpha software. ClaimFence is not a security control, and a clean
+scan or unchanged drift receipt is not a security assessment.
+
+When `--root` is supplied, scan inputs are constrained after symbolic-link resolution.
+Comparison ledgers are treated as untrusted structured input and capped at 32 MiB, but
+ClaimFence does not authenticate their provenance. Source a gate ledger from a protected
+revision or trusted workflow artifact. The composite Action and pre-commit hook place scan
+paths after the CLI option terminator so a dash-prefixed path is not interpreted as an
+option.

@@ -254,9 +254,9 @@ class ScannerTests(unittest.TestCase):
             (root / "docs").mkdir()
             (root / "tests").mkdir()
             receipt = root / "docs" / "receipt.md"
-            receipt.write_text("measured evidence\n", encoding="utf-8")
+            receipt.write_bytes(b"measured evidence\n")
             test_file = root / "tests" / "check.py"
-            test_file.write_text("assert True\n", encoding="utf-8")
+            test_file.write_bytes(b"assert True\n")
             readme = root / "README.md"
             readme.write_text(
                 "# Demo\n\n## Verification\n\n"
@@ -362,6 +362,35 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(1, len(escaped))
         self.assertIn("escapes", escaped[0].message)
 
+    def test_selected_root_rejects_explicit_outside_scan_path(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            parent = Path(directory)
+            root = parent / "repository"
+            root.mkdir()
+            outside = parent / "outside.md"
+            outside.write_text("This is production-ready.\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "escapes the repository root"):
+                scan_paths([outside], Config(), root)
+            with self.assertRaisesRegex(ValueError, "escapes the repository root"):
+                scan_file(outside, Config(), root)
+            with self.assertRaisesRegex(ValueError, "escapes the repository root"):
+                scan_paths([parent / "absent.md"], Config(), root)
+
+    def test_selected_root_rejects_markdown_symlink_escape(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            parent = Path(directory)
+            root = parent / "repository"
+            root.mkdir()
+            outside = parent / "outside.md"
+            outside.write_text("This is production-ready.\n", encoding="utf-8")
+            link = root / "linked.md"
+            try:
+                link.symlink_to(outside)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+            with self.assertRaisesRegex(ValueError, "escapes the repository root"):
+                scan_paths([root], Config(), root)
+
     def test_reasoned_suppression_applies_to_a_wrapped_logical_block(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
@@ -456,9 +485,9 @@ class ScannerTests(unittest.TestCase):
         summary = github_summary(result, Path.cwd(), Severity.WARNING)
         outputs = github_output_report(result, Severity.WARNING)
         self.assertEqual("ClaimFence", parsed_json["tool"]["name"])
-        self.assertEqual("0.4.0", parsed_json["tool"]["version"])
+        self.assertEqual("0.5.0", parsed_json["tool"]["version"])
         self.assertEqual("2.1.0", parsed_sarif["version"])
-        self.assertEqual("0.4.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
+        self.assertEqual("0.5.0", parsed_sarif["runs"][0]["tool"]["driver"]["version"])
         self.assertIn("::error", annotations)
         self.assertIn("### Findings by rule", summary)
         self.assertIn("outcome=failed", outputs)
@@ -481,6 +510,41 @@ class ScannerTests(unittest.TestCase):
             config = load_config(path)
         self.assertEqual(2, config.context_blocks)
         self.assertEqual(2, config.context_radius())
+
+    def test_configuration_rejects_boolean_context_radius(self) -> None:
+        with self.assertRaisesRegex(ValueError, "context_blocks must be an integer"):
+            Config(context_blocks=True)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "claimfence.toml"
+            path.write_text("[claimfence]\ncontext_blocks = true\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "context_blocks must be an integer"):
+                load_config(path)
+
+    def test_configuration_rejects_blank_custom_evidence_terms(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not contain empty terms"):
+            Config(extra_evidence_terms=["  "])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "claimfence.toml"
+            path.write_text(
+                '[claimfence]\nextra_evidence_terms = ["  "]\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "must not contain empty terms"):
+                load_config(path)
+
+    def test_mutated_blank_evidence_term_cannot_fail_open(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            path = root / "README.md"
+            path.write_text(
+                "# Demo\n\nUnder version 1, this gateway is secure.\n",
+                encoding="utf-8",
+            )
+            config = Config()
+            config.extra_evidence_terms = [""]
+            result = scan_paths([path], config, root)
+        self.assertEqual("review", result.claims[0].status)
+        self.assertIn("CF002", {finding.rule_id for finding in result.findings})
 
 
 if __name__ == "__main__":

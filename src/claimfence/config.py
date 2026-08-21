@@ -26,6 +26,27 @@ class Config:
     disabled_rules: set[str] = field(default_factory=set)
     extra_evidence_terms: list[str] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if isinstance(self.context_blocks, bool) or not isinstance(self.context_blocks, int):
+            raise ValueError("context_blocks must be an integer from 0 to 20")
+        if not 0 <= self.context_blocks <= 20:
+            raise ValueError("context_blocks must be an integer from 0 to 20")
+        if self.context_lines is not None and (
+            isinstance(self.context_lines, bool)
+            or not isinstance(self.context_lines, int)
+            or not 0 <= self.context_lines <= 20
+        ):
+            raise ValueError("context_lines must be an integer from 0 to 20")
+        if not isinstance(self.extra_evidence_terms, list) or not all(
+            isinstance(term, str) for term in self.extra_evidence_terms
+        ):
+            raise ValueError("extra_evidence_terms must be a list of strings")
+        if any(not term.strip() for term in self.extra_evidence_terms):
+            raise ValueError("extra_evidence_terms must not contain empty terms")
+        self.extra_evidence_terms = [
+            term.strip() for term in self.extra_evidence_terms
+        ]
+
     def context_radius(self) -> int:
         """Return the logical-block radius, honoring the v0.2 compatibility key."""
         return self.context_lines if self.context_lines is not None else self.context_blocks
@@ -49,12 +70,20 @@ def load_config(path: Path | None, root: Path | None = None) -> Config:
         raise ValueError("use context_blocks or legacy context_lines, not both")
     if "context_blocks" in section:
         context_blocks = section["context_blocks"]
-        if not isinstance(context_blocks, int) or not 0 <= context_blocks <= 20:
+        if (
+            isinstance(context_blocks, bool)
+            or not isinstance(context_blocks, int)
+            or not 0 <= context_blocks <= 20
+        ):
             raise ValueError("context_blocks must be an integer from 0 to 20")
         config.context_blocks = context_blocks
     elif "context_lines" in section:
         context_lines = section["context_lines"]
-        if not isinstance(context_lines, int) or not 0 <= context_lines <= 20:
+        if (
+            isinstance(context_lines, bool)
+            or not isinstance(context_lines, int)
+            or not 0 <= context_lines <= 20
+        ):
             raise ValueError("context_lines must be an integer from 0 to 20")
         config.context_lines = context_lines
 
@@ -69,12 +98,16 @@ def load_config(path: Path | None, root: Path | None = None) -> Config:
         value.upper() for value in _string_list(section.get("disabled_rules", []), "disabled_rules")
     }
     config.extra_evidence_terms = _string_list(
-        section.get("extra_evidence_terms", []), "extra_evidence_terms"
+        section.get("extra_evidence_terms", []),
+        "extra_evidence_terms",
+        non_blank=True,
     )
     return config
 
 
-def _string_list(value: object, name: str) -> list[str]:
+def _string_list(value: object, name: str, *, non_blank: bool = False) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"{name} must be a list of strings")
-    return list(value)
+    if non_blank and any(not item.strip() for item in value):
+        raise ValueError(f"{name} must not contain empty terms")
+    return [item.strip() for item in value] if non_blank else list(value)

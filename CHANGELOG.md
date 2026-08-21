@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.0 - 2026-08-20
+
+- Add deterministic Evidence Drift comparison between a saved v1 claim ledger and the
+  current scan.
+- Emit a versioned JSON drift receipt with claim, context, disposition, and evidence-anchor
+  events plus explicit review classifications.
+- Add `none`, `review`, and `any` drift gates to the CLI and composite GitHub Action.
+- Expose drift state, event count, affected-claim count, review count, and outcome as Action
+  outputs and in the workflow summary.
+- Normalize repository-local anchor identity so cosmetic link spelling and source-coordinate
+  movement do not create drift while recorded digest and size changes do.
+- Validate and bound untrusted comparison ledgers before use and escape ledger-derived
+  workflow-summary values.
+- Refuse output-path collisions that could overwrite a trusted comparison ledger or replace
+  another report with a drift receipt.
+- Reject explicit scan paths and Markdown symbolic links that escape a selected repository
+  root.
+- Treat composite-Action and pre-commit scan paths strictly as positional arguments after
+  the option terminator.
+- Reject blank custom evidence terms and boolean context radii instead of allowing
+  fail-open or ambiguous configuration.
+- Expand CI through Python 3.14, add macOS and Windows boundary coverage, and smoke-test the
+  built wheel and drift-enabled composite Action.
+
 ## 0.4.0 - 2026-08-14
 
 - Add a deterministic claim ledger covering both reviewable and context-linked claims.

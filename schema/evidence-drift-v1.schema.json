@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/schema/evidence-drift-v1.schema.json",
+  "title": "ClaimFence evidence drift receipt",
+  "description": "A deterministic comparison of two ClaimFence v1 claim ledgers.",
+  "type": "object",
+  "required": ["$schema", "schema_version", "tool", "previous", "current", "summary", "events", "interpretation", "limitations"],
+  "properties": {
+    "$schema": {"const": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/schema/evidence-drift-v1.schema.json"},
+    "schema_version": {"const": "1.0"},
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "ClaimFence"},
+        "version": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "previous": {"$ref": "#/$defs/ledgerSummary"},
+    "current": {"$ref": "#/$defs/ledgerSummary"},
+    "summary": {
+      "type": "object",
+      "required": ["events", "claims_changed", "claims_requiring_review", "review_events", "stable_claims", "event_counts"],
+      "properties": {
+        "events": {"type": "integer", "minimum": 0},
+        "claims_changed": {"type": "integer", "minimum": 0},
+        "claims_requiring_review": {"type": "integer", "minimum": 0},
+        "review_events": {"type": "integer", "minimum": 0},
+        "stable_claims": {"type": "integer", "minimum": 0},
+        "event_counts": {
+          "type": "object",
+          "required": ["claim-added", "claim-removed", "claim-field-changed", "evidence-added", "evidence-removed", "evidence-changed"],
+          "properties": {
+            "claim-added": {"type": "integer", "minimum": 0},
+            "claim-removed": {"type": "integer", "minimum": 0},
+            "claim-field-changed": {"type": "integer", "minimum": 0},
+            "evidence-added": {"type": "integer", "minimum": 0},
+            "evidence-removed": {"type": "integer", "minimum": 0},
+            "evidence-changed": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "claim_id", "path", "text", "review_required", "before", "after"],
+        "properties": {
+          "kind": {"enum": ["claim-added", "claim-removed", "claim-field-changed", "evidence-added", "evidence-removed", "evidence-changed"]},
+          "claim_id": {"type": "string", "pattern": "^CLM-[0-9a-f]{16}$"},
+          "path": {"type": "string"},
+          "text": {"type": "string"},
+          "review_required": {"type": "boolean"},
+          "field": {"type": "string"},
+          "anchor": {
+            "type": "object",
+            "required": ["kind", "target"],
+            "properties": {
+              "kind": {"type": "string"},
+              "target": {"type": "string"},
+              "repository_path": {"type": "string"}
+            },
+            "additionalProperties": false
+          },
+          "before": {},
+          "after": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "required": ["changed", "review_required"],
+      "properties": {
+        "changed": {"type": "string", "minLength": 1},
+        "review_required": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+  },
+  "$defs": {
+    "ledgerSummary": {
+      "type": "object",
+      "required": ["tool_version", "claims"],
+      "properties": {
+        "tool_version": {"type": "string", "minLength": 1},
+        "claims": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
