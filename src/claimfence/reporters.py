@@ -60,7 +60,7 @@ def ledger_payload(result: ScanResult, root: Path) -> dict[str, object]:
     claim_counts = result.claim_counts()
     return {
         "$schema": (
-            "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/"
+            "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/"
             "schema/claim-ledger-v1.schema.json"
         ),
         "schema_version": "1.0",

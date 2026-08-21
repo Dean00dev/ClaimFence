@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 - 2026-08-21
+
+- Correct release provenance after the published `v0.5.0` tag targeted the prior v0.4
+  source instead of the verified Evidence Drift implementation.
+- Point install examples and immutable ledger and drift schema identifiers at the
+  corrective `v0.5.1` release.
+- Include the Windows-safe byte fixtures used by the cross-platform evidence-digest tests.
+
 ## 0.5.0 - 2026-08-20
 
 - Add deterministic Evidence Drift comparison between a saved v1 claim ledger and the

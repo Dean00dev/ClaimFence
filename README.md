@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: Dean00dev/ClaimFence@v0.5.0
+      - uses: Dean00dev/ClaimFence@v0.5.1
         id: claimfence
         with:
           paths: README.md docs
@@ -157,7 +157,7 @@ exposes stable outputs for follow-on steps:
 Existing projects can supply the same config and baseline used by the CLI:
 
 ```yaml
-      - uses: Dean00dev/ClaimFence@v0.5.0
+      - uses: Dean00dev/ClaimFence@v0.5.1
         with:
           paths: README.md docs
           config: .claimfence.toml
@@ -275,7 +275,7 @@ boundary coverage on macOS and Windows, then smoke-tests the wheel and bundled A
   marked present but unhashed, so same-size byte changes in those files are outside the
   drift detector.
 - A finding is a review prompt, not proof that the underlying system is unsafe.
-- Rule coverage is intentionally narrow in v0.5.0. Synonyms and domain-specific claims can
+- Rule coverage is intentionally narrow in v0.5.1. Synonyms and domain-specific claims can
   be missed.
 - English is the only supported prose language in this release.
 - Markdown rendered from templates or generated after the scan is outside the tested path.
@@ -286,7 +286,7 @@ ClaimFence was conceived and directed by Dean Egan and implemented through an
 AI-assisted build workflow. Its design follows one principle: **a claim should
 expose the boundary of the evidence supporting it.**
 
-For v0.5.0, [runtime dependencies are empty](pyproject.toml) and the executable scan path
+For v0.5.1, [runtime dependencies are empty](pyproject.toml) and the executable scan path
 is inspectable in [`src/claimfence`](src/claimfence). Scanned documents are processed on
 the machine or CI runner invoking the command.
 

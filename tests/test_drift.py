@@ -52,12 +52,12 @@ class DriftTests(unittest.TestCase):
             current = self._ledger(root, readme)
         previous = deepcopy(current)
         previous["tool"]["version"] = "0.4.0"
-        previous["$schema"] = previous["$schema"].replace("v0.5.0", "v0.4.0")
+        previous["$schema"] = previous["$schema"].replace("v0.5.1", "v0.4.0")
 
         drift = compare_ledgers(previous, current)
         self.assertEqual(0, drift["summary"]["events"])
         self.assertEqual("0.4.0", drift["previous"]["tool_version"])
-        self.assertEqual("0.5.0", drift["current"]["tool_version"])
+        self.assertEqual("0.5.1", drift["current"]["tool_version"])
 
     def test_changed_evidence_bytes_require_review(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/schema/evidence-drift-v1.schema.json",
+  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/schema/evidence-drift-v1.schema.json",
   "title": "ClaimFence evidence drift receipt",
   "description": "A deterministic comparison of two ClaimFence v1 claim ledgers.",
   "type": "object",
   "required": ["$schema", "schema_version", "tool", "previous", "current", "summary", "events", "interpretation", "limitations"],
   "properties": {
-    "$schema": {"const": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.0/schema/evidence-drift-v1.schema.json"},
+    "$schema": {"const": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/schema/evidence-drift-v1.schema.json"},
     "schema_version": {"const": "1.0"},
     "tool": {
       "type": "object",
