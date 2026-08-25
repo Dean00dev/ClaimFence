@@ -95,6 +95,34 @@ class GitComparisonTests(unittest.TestCase):
 
         self.assertEqual(expected, scanned.commit)
 
+    def test_git_replacement_objects_cannot_substitute_compared_commit(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = self._repository(Path(directory))
+            original_commit = self._commit(root, "original")
+            original_ledger = scan_git_ref(
+                root, [root / "README.md"], Config(), original_commit
+            ).ledger
+
+            (root / "README.md").write_text(
+                "# Demo\n\n"
+                "<!-- claimfence-id: gateway/readiness -->\n\n"
+                "Under version 9, the gateway is insecure.\n\n"
+                "Inspect [the receipt](docs/receipt.md).\n\n"
+                "## Limitations\n\nOther configurations are out of scope.\n",
+                encoding="utf-8",
+            )
+            replacement_commit = self._commit(root, "replacement")
+            self._git(root, "replace", original_commit, replacement_commit)
+
+            substituted = self._git(root, "show", f"{original_commit}:README.md")
+            scanned = scan_git_ref(
+                root, [root / "README.md"], Config(), original_commit
+            )
+
+        self.assertIn("version 9", substituted)
+        self.assertEqual(original_commit, scanned.commit)
+        self.assertEqual(original_ledger, scanned.ledger)
+
     def test_new_markdown_path_becomes_claim_added_instead_of_invalid_input(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
