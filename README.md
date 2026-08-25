@@ -89,6 +89,48 @@ Read the [Evidence Drift contract](docs/EVIDENCE_DRIFT.md) before using it as a 
   <img src="assets/evidence-drift-preview.svg" width="100%" alt="Illustrative ClaimFence Evidence Drift receipt with review and change events">
 </p>
 
+## Pull Request Claim Review
+
+**No saved base ledger required.** Version 0.6 can scan an existing local Git revision and
+compare it directly with the proposed worktree:
+
+```bash
+claimfence README.md docs --root . --fail-on none \
+  --compare-ref origin/main \
+  --ledger-output current-ledger.json \
+  --drift-output claimfence-drift.json \
+  --fail-on-drift review
+```
+
+ClaimFence resolves `origin/main` once and records the exact commit identifier in the drift
+receipt. It reads committed blobs without checking out the revision, changing `HEAD`,
+running hooks, or invoking checkout filters. It never fetches a missing revision; CI must
+make the chosen commit available locally.
+
+The **current worktree configuration is applied to both revisions**. This deliberately asks
+“what changed under the policy proposed for this run?” rather than mixing documentation
+drift with two different rule configurations. The resolved commit identifies compared
+bytes; it does not prove that the commit was protected, reviewed, or trustworthy.
+
+For a pull request, check out history and pass the event's exact base commit:
+
+```yaml
+- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+  with:
+    fetch-depth: 0
+- uses: Dean00dev/ClaimFence@v0.6.0
+  with:
+    paths: README.md docs
+    compare-ref: ${{ github.event.pull_request.base.sha }}
+    fail-on: warning
+    fail-on-drift: review
+    drift-output: claimfence-drift.json
+```
+
+`--compare-ref` and `--compare-ledger` are mutually exclusive. Read the
+[Pull Request Claim Review contract](docs/PR_CLAIM_REVIEW.md) for path, symlink, policy,
+history-depth, and provenance boundaries.
+
 ## Stable Claim Anchors
 
 By default, ClaimFence derives a claim identifier from its repository path and normalized
@@ -176,6 +218,7 @@ exposes stable outputs for follow-on steps:
 | `drift-events-count`, `drift-claims-count` | Changed events and affected claims |
 | `drift-review-count` | Changed claims classified as requiring review |
 | `drift-outcome` | `not-configured`, `stable`, `changed`, or `failed` |
+| `drift-base-commit` | Exact commit resolved by `compare-ref`, or empty for ledger comparison |
 
 Existing projects can supply the same config and baseline used by the CLI:
 
@@ -194,6 +237,8 @@ Existing projects can supply the same config and baseline used by the CLI:
 
 Supply `compare-ledger` from a protected base revision or trusted workflow artifact. The
 Action validates the ledger structure but does not authenticate who produced it.
+Alternatively, use `compare-ref` to generate the previous ledger directly from a locally
+available commit. The Action does not fetch Git history on your behalf.
 
 For security-sensitive workflows, replace version tags with the full commit SHA you have
 reviewed. ClaimFence can also produce JSON and SARIF from the same scan used for

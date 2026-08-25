@@ -27,6 +27,7 @@ _EVENT_ORDER = {kind: index for index, kind in enumerate(EVENT_KINDS)}
 _CLAIM_ID = re.compile(r"^CLM-[0-9a-f]{16}$")
 _STABLE_ID = re.compile(r"^[a-z0-9][a-z0-9._:/-]{0,127}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_GIT_COMMIT = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _SEVERITY_RANK = {"info": 1, "warning": 2, "error": 3}
 _ANCHOR_KINDS = {"command", "external-url", "local-file", "local-path"}
 _ANCHOR_STATUSES = {
@@ -182,9 +183,13 @@ def validate_ledger(payload: object, *, source: str = "claim ledger") -> None:
 def compare_ledgers(
     previous: dict[str, Any],
     current: dict[str, Any],
+    *,
+    comparison: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     validate_ledger(previous, source="previous claim ledger")
     validate_ledger(current, source="current claim ledger")
+    if comparison is not None:
+        _validate_comparison(comparison)
     previous_claims = {claim["id"]: claim for claim in previous["claims"]}
     current_claims = {claim["id"]: claim for claim in current["claims"]}
     events: list[dict[str, Any]] = []
@@ -228,7 +233,7 @@ def compare_ledgers(
     review_claim_ids = {
         event["claim_id"] for event in events if event["review_required"]
     }
-    return {
+    payload = {
         "$schema": DRIFT_SCHEMA,
         "schema_version": "1.0",
         "tool": {"name": "ClaimFence", "version": __version__},
@@ -268,6 +273,22 @@ def compare_ledgers(
             "External URLs and recorded commands remain unfetched and unexecuted.",
         ],
     }
+    if comparison is not None:
+        payload["comparison"] = comparison
+    return payload
+
+
+def _validate_comparison(comparison: dict[str, str]) -> None:
+    if set(comparison) != {"mode", "base_commit", "policy_source"}:
+        raise ValueError("comparison metadata has unexpected or missing fields")
+    if not all(isinstance(value, str) for value in comparison.values()):
+        raise ValueError("comparison metadata fields must be strings")
+    if comparison["mode"] != "git-ref":
+        raise ValueError("comparison metadata has an unsupported mode")
+    if comparison["policy_source"] != "current-worktree":
+        raise ValueError("comparison metadata has an unsupported policy source")
+    if not _GIT_COMMIT.fullmatch(comparison["base_commit"]):
+        raise ValueError("comparison metadata has an invalid base commit")
 
 
 def drift_json_report(payload: dict[str, Any]) -> str:
@@ -283,6 +304,9 @@ def drift_text_report(payload: dict[str, Any]) -> str:
             f"{summary['claims_requiring_review']} claim(s) require review."
         )
     ]
+    comparison = payload.get("comparison")
+    if comparison and comparison.get("mode") == "git-ref":
+        lines.append(f"  base commit: {comparison['base_commit']}")
     for event in payload["events"][:20]:
         field = f" {event['field']}" if event.get("field") else ""
         marker = "review" if event["review_required"] else "change"
@@ -328,6 +352,15 @@ def drift_github_summary(payload: dict[str, Any]) -> str:
             f"{counts['evidence-removed']} | {counts['evidence-changed']} |"
         ),
     ]
+    comparison = payload.get("comparison")
+    if comparison and comparison.get("mode") == "git-ref":
+        lines[5:5] = [
+            (
+                "Base commit: "
+                f"{_github_code(comparison['base_commit'])}; policy: current worktree."
+            ),
+            "",
+        ]
     if payload["events"]:
         lines.extend(["", "### First drift events", ""])
         for event in payload["events"][:20]:
@@ -367,6 +400,7 @@ def drift_github_output(
             "drift-claims-count": 0,
             "drift-review-count": 0,
             "drift-outcome": "not-configured",
+            "drift-base-commit": "",
         }
     else:
         summary = payload["summary"]
@@ -379,6 +413,7 @@ def drift_github_output(
             "drift-outcome": (
                 "failed" if failed else "stable" if summary["events"] == 0 else "changed"
             ),
+            "drift-base-commit": payload.get("comparison", {}).get("base_commit", ""),
         }
     return "\n".join(f"{name}={value}" for name, value in values.items())
 

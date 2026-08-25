@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.6.0/schema/evidence-drift-v1.schema.json",
   "title": "ClaimFence evidence drift receipt",
-  "description": "A deterministic comparison of two ClaimFence v1 claim ledgers.",
+  "description": "A deterministic comparison of two ClaimFence v1 claim ledgers, optionally deriving the previous ledger from a local Git commit.",
   "type": "object",
   "required": ["$schema", "schema_version", "tool", "previous", "current", "summary", "events", "interpretation", "limitations"],
   "properties": {
@@ -19,6 +19,16 @@
     },
     "previous": {"$ref": "#/$defs/ledgerSummary"},
     "current": {"$ref": "#/$defs/ledgerSummary"},
+    "comparison": {
+      "type": "object",
+      "required": ["mode", "base_commit", "policy_source"],
+      "properties": {
+        "mode": {"const": "git-ref"},
+        "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+        "policy_source": {"const": "current-worktree"}
+      },
+      "additionalProperties": false
+    },
     "summary": {
       "type": "object",
       "required": ["events", "claims_changed", "claims_requiring_review", "review_events", "stable_claims", "event_counts"],

@@ -126,6 +126,30 @@ class DriftTests(unittest.TestCase):
         self.assertTrue(drift_fails(first, "any"))
         self.assertFalse(drift_fails(first, "none"))
 
+    def test_git_comparison_metadata_is_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            readme, _ = self._project(root)
+            ledger = self._ledger(root, readme)
+
+        valid = {
+            "mode": "git-ref",
+            "base_commit": "a" * 40,
+            "policy_source": "current-worktree",
+        }
+        payload = compare_ledgers(ledger, ledger, comparison=valid)
+        self.assertEqual(valid, payload["comparison"])
+
+        for invalid in (
+            {**valid, "mode": "self-declared"},
+            {**valid, "base_commit": "not-a-commit"},
+            {**valid, "base_commit": 1},
+            {**valid, "extra": "field"},
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "comparison metadata"):
+                    compare_ledgers(ledger, ledger, comparison=invalid)
+
     def test_equivalent_local_link_spelling_is_drift_stable(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)

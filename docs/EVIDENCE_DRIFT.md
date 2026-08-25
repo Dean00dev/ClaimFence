@@ -3,9 +3,10 @@
 Evidence Drift answers a narrow question: **what changed between a previous ClaimFence
 claim ledger and the current scan?**
 
-It compares deterministic declarations already present in the ledgers. It does not fetch a
-URL, execute a command, inspect version-control history, authenticate the earlier ledger,
-or judge whether evidence is true, relevant, current, or sufficient.
+It compares deterministic declarations in two ledgers. The previous ledger can be supplied
+directly or generated from an existing local Git revision with `--compare-ref`. It does not
+fetch a URL or missing Git revision, execute a recorded command, authenticate the earlier
+ledger or commit, or judge whether evidence is true, relevant, current, or sufficient.
 
 ## Generate a receipt
 
@@ -36,6 +37,20 @@ normal text report includes a concise drift section. `--ledger-output` is option
 comparison but is useful for retaining the current state. ClaimFence rejects output paths
 that would overwrite the comparison ledger and rejects a drift receipt path shared with
 another output.
+
+For pull requests, the previous ledger can instead be derived from committed Git objects:
+
+```bash
+claimfence README.md docs --root . --fail-on none \
+  --compare-ref origin/main \
+  --ledger-output current-ledger.json \
+  --drift-output claimfence-drift.json \
+  --fail-on-drift review
+```
+
+The receipt records the exact resolved base commit and `policy_source: current-worktree`.
+The ref name itself is not recorded because it can move. See
+[Pull Request Claim Review](PR_CLAIM_REVIEW.md) for the full contract.
 
 ## Event model
 
@@ -79,16 +94,22 @@ repository-relative identity where available, which makes `examples/bounded-read
 `./examples/bounded-readme.md` equivalent. Commands and external URLs use their recorded
 targets. Changing the bytes at the same local identity produces `evidence-changed`.
 
-Both ledger tool versions are recorded in the receipt and workflow summary. A version
-difference is not itself an event because rule upgrades can intentionally change the
-inventory; review version transitions separately.
+Both ledger tool versions are recorded in the receipt and workflow summary. Git-native
+comparison additionally records the resolved base commit. A version difference is not
+itself an event because rule upgrades can intentionally change the inventory; review
+version transitions separately.
 
 ## Trust boundary
 
-A comparison is only as trustworthy as its previous ledger. Keep that ledger on a protected
-base revision, download it from a trusted workflow run, or bind it to an artifact with an
-attestation. Do not let an untrusted change replace both the documentation and its own
-comparison ledger.
+A comparison is only as trustworthy as its previous state. For ledger comparison, keep the
+ledger on a protected base revision, download it from a trusted workflow run, or bind it to
+an artifact with an attestation. Do not let an untrusted change replace both the
+documentation and its own comparison ledger.
+
+For Git-native comparison, prefer an exact base SHA supplied by trusted workflow metadata.
+The recorded commit binds the result to the local objects that were read; it does not prove
+remote origin, authorship, review, branch protection, or that the caller selected the
+intended merge base.
 
 ClaimFence validates the v1 schema version, producer name, claim identifiers, consumed field
 types, dispositions, evidence states, and digest shape before comparison. Input is capped at
@@ -109,8 +130,8 @@ The GitHub Action accepts the same options:
 ```
 
 It appends the comparison to the workflow summary and exposes `drift-configured`,
-`drift-events-count`, `drift-claims-count`, `drift-review-count`, and `drift-outcome` for
-later steps.
+`drift-events-count`, `drift-claims-count`, `drift-review-count`, `drift-outcome`, and
+`drift-base-commit` for later steps.
 
 ## Limitations and interpretation boundary
 

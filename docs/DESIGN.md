@@ -104,6 +104,17 @@ Comparison ledgers are capped at 32 MiB and checked for schema version, producer
 identifiers, consumed field types, allowed dispositions, and digest shape before use.
 GitHub summary values derived from ledgers are escaped and flattened to one line.
 
+Git-native comparison resolves a caller-selected local revision to an exact commit and
+reads raw Git blobs without checkout. The current worktree configuration is applied to both
+the base snapshot and current scan. This isolates claim/evidence changes under one policy,
+but means a configuration change can reinterpret both inventories. The receipt records the
+commit and policy source, not the movable ref name.
+
+Only selected Markdown and directly referenced local evidence are materialized. Unsafe Git
+paths and selected symbolic links fail closed. ClaimFence does not fetch history, establish
+branch protection, authenticate authorship, or prove that the selected commit is the
+intended merge base.
+
 ## Negation ordering
 
 Universal negatives are assurance claims when they state system behaviour, for example

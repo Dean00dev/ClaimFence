@@ -45,6 +45,10 @@ inputs:
     description: Optional previous claim ledger to compare with the current scan
     required: false
     default: ""
+  compare-ref:
+    description: Optional local Git revision to scan as the drift base
+    required: false
+    default: ""
   drift-output:
     description: Optional path for the deterministic evidence-drift JSON receipt
     required: false
@@ -94,7 +98,7 @@ outputs:
     description: ClaimFence threshold outcome (passed, failed, or report-only)
     value: ${{ steps.scan.outputs.outcome }}
   drift-configured:
-    description: Whether a previous evidence ledger was supplied
+    description: Whether ledger or Git-reference drift comparison was configured
     value: ${{ steps.scan.outputs.drift-configured }}
   drift-events-count:
     description: Number of deterministic claim and evidence drift events
@@ -108,6 +112,9 @@ outputs:
   drift-outcome:
     description: Drift outcome (not-configured, stable, changed, or failed)
     value: ${{ steps.scan.outputs.drift-outcome }}
+  drift-base-commit:
+    description: Exact resolved base commit for compare-ref, or empty otherwise
+    value: ${{ steps.scan.outputs.drift-base-commit }}
 runs:
   using: composite
   steps:
@@ -125,6 +132,7 @@ runs:
         CLAIMFENCE_LEDGER_OUTPUT: ${{ inputs.ledger-output }}
         CLAIMFENCE_HTML_OUTPUT: ${{ inputs.html-output }}
         CLAIMFENCE_COMPARE_LEDGER: ${{ inputs.compare-ledger }}
+        CLAIMFENCE_COMPARE_REF: ${{ inputs.compare-ref }}
         CLAIMFENCE_DRIFT_OUTPUT: ${{ inputs.drift-output }}
         CLAIMFENCE_FAIL_ON_DRIFT: ${{ inputs.fail-on-drift }}
         CLAIMFENCE_ACTION_PATH: ${{ github.action_path }}
@@ -159,6 +167,9 @@ runs:
         fi
         if [[ -n "$CLAIMFENCE_COMPARE_LEDGER" ]]; then
           claimfence_args+=(--compare-ledger "$CLAIMFENCE_COMPARE_LEDGER")
+        fi
+        if [[ -n "$CLAIMFENCE_COMPARE_REF" ]]; then
+          claimfence_args+=(--compare-ref "$CLAIMFENCE_COMPARE_REF")
         fi
         if [[ -n "$CLAIMFENCE_DRIFT_OUTPUT" ]]; then
           claimfence_args+=(--drift-output "$CLAIMFENCE_DRIFT_OUTPUT")

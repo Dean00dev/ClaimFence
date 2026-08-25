@@ -55,18 +55,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Generate comparison ledger
-        run: |
-          PYTHONPATH=src python -m claimfence README.md docs \
-            --root . \
-            --fail-on none \
-            --ledger-output previous-ledger.json
       - uses: ./
         id: claimfence
         with:
           paths: README.md docs
           fail-on: warning
-          compare-ledger: previous-ledger.json
+          compare-ref: HEAD
           fail-on-drift: any
           ledger-output: claimfence-ledger.json
           html-output: claimfence-map.html
@@ -80,6 +74,7 @@ jobs:
           DRIFT_CONFIGURED: ${{ steps.claimfence.outputs.drift-configured }}
           DRIFT_EVENTS: ${{ steps.claimfence.outputs.drift-events-count }}
           DRIFT_OUTCOME: ${{ steps.claimfence.outputs.drift-outcome }}
+          DRIFT_BASE_COMMIT: ${{ steps.claimfence.outputs.drift-base-commit }}
         run: |
           test "$FILES_SCANNED" -gt 0
           test "$CLAIMS_COUNT" -gt 0
@@ -88,6 +83,7 @@ jobs:
           test "$DRIFT_CONFIGURED" = "true"
           test "$DRIFT_EVENTS" -eq 0
           test "$DRIFT_OUTCOME" = "stable"
+          test "$DRIFT_BASE_COMMIT" = "$(git rev-parse HEAD)"
           test -s claimfence-ledger.json
           test -s claimfence-map.html
           test -s claimfence-drift.json
@@ -97,7 +93,6 @@ jobs:
         with:
           name: claimfence-evidence-receipts
           path: |
-            previous-ledger.json
             claimfence-ledger.json
             claimfence-map.html
             claimfence-drift.json
