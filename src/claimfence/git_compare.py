@@ -226,6 +226,7 @@ def _git(root: Path, *arguments: str) -> bytes:
     environment.update(
         {
             "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
             "GIT_OPTIONAL_LOCKS": "0",
             "LC_ALL": "C",
         }
