@@ -1,6 +1,6 @@
 """ClaimFence: deterministic linting for evidence-bound documentation claims."""
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 from .models import Finding, ScanResult, Severity
 from .scanner import scan_paths

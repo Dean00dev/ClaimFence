@@ -9,7 +9,14 @@ from typing import Iterable
 from urllib.parse import unquote, urlsplit
 
 from .config import Config
-from .models import ClaimRecord, EvidenceAnchor, Finding, ScanResult, Severity
+from .models import (
+    ClaimRecord,
+    EvidenceAnchor,
+    Finding,
+    ScanResult,
+    Severity,
+    stable_claim_id,
+)
 from .rules import (
     COMMAND_PATTERN,
     LIMITATION_PATTERN,
@@ -39,6 +46,11 @@ EVIDENCE_CUE_PATTERN = re.compile(
     r"source|test(?:ed|ing|s)?|verif(?:y|ied|ication))\b",
     re.IGNORECASE,
 )
+CLAIM_ID_DIRECTIVE_PATTERN = re.compile(
+    r"<!--\s*claimfence-id\s*:\s*(?P<value>.*?)\s*-->",
+    re.IGNORECASE,
+)
+CLAIM_ID_VALUE_PATTERN = re.compile(r"[a-z0-9][a-z0-9._:/-]{0,127}")
 MAX_HASH_BYTES = 16 * 1024 * 1024
 
 
@@ -70,6 +82,7 @@ class EvidenceReference:
 @dataclass(slots=True)
 class _ClaimAccumulator:
     claim_id: str
+    explicit_id: str | None
     path: Path
     line: int
     column: int
@@ -99,6 +112,7 @@ class _ClaimAccumulator:
         )
         return ClaimRecord(
             self.claim_id,
+            self.explicit_id,
             tuple(sorted(self.rule_ids)),
             self.severity,
             self.path,
@@ -153,6 +167,17 @@ def scan_paths(
         result.findings.extend(file_scan.findings)
         result.claims.extend(file_scan.claims)
         result.suppressed += file_scan.suppressed
+    explicit_ids: dict[str, ClaimRecord] = {}
+    for claim in result.claims:
+        if claim.explicit_id is None:
+            continue
+        previous = explicit_ids.get(claim.explicit_id)
+        if previous is not None:
+            raise ValueError(
+                "duplicate claimfence-id "
+                f"{claim.explicit_id!r}: {previous.path} and {claim.path}"
+            )
+        explicit_ids[claim.explicit_id] = claim
     result.findings.sort(
         key=lambda finding: (
             finding.path.as_posix(),
@@ -197,6 +222,7 @@ def _scan_file_details(
     lines = text.splitlines()
     blocks = _logical_blocks(lines)
     suppression_map = _block_suppressions(lines, blocks)
+    explicit_id_map = _claim_id_directives(lines, blocks)
     headings = [block.scan_text.strip().lower() for block in blocks if block.kind == "heading"]
     section_markers = headings + [
         re.sub(r"[*_~]+", "", block.raw_text).strip().lower()
@@ -215,6 +241,8 @@ def _scan_file_details(
     claims: dict[str, _ClaimAccumulator] = {}
     claim_ids: dict[tuple[int, str], str] = {}
     claim_occurrences: dict[str, int] = {}
+    explicit_id_owners: dict[str, int] = {}
+    explicit_claim_texts: dict[int, set[str]] = {}
     evidence_cache: dict[int, tuple[EvidenceAnchor, ...]] = {}
 
     for index, block in enumerate(blocks):
@@ -241,6 +269,20 @@ def _scan_file_details(
                 claim_key = (index, normalized_claim)
                 claim_id = claim_ids.get(claim_key)
                 if claim_id is None:
+                    explicit_id = explicit_id_map.get(index)
+                    if explicit_id is not None:
+                        owner = explicit_id_owners.setdefault(explicit_id, index)
+                        if owner != index:
+                            raise ValueError(
+                                f"duplicate claimfence-id {explicit_id!r} in {path}"
+                            )
+                        texts = explicit_claim_texts.setdefault(index, set())
+                        texts.add(normalized_claim)
+                        if len(texts) > 1:
+                            raise ValueError(
+                                f"claimfence-id {explicit_id!r} applies to multiple "
+                                f"claims in the block starting at line {block.start_line}"
+                            )
                     occurrence = claim_occurrences.get(normalized_claim, 0)
                     claim_occurrences[normalized_claim] = occurrence + 1
                     claim_id = _claim_record_id(
@@ -248,12 +290,14 @@ def _scan_file_details(
                         claim,
                         repository_root,
                         occurrence,
+                        explicit_id=explicit_id,
                     )
                     claim_ids[claim_key] = claim_id
                 accumulator = claims.get(claim_id)
                 if accumulator is None:
                     accumulator = _ClaimAccumulator(
                         claim_id,
+                        explicit_id_map.get(index),
                         path,
                         position.line,
                         position.column,
@@ -298,6 +342,14 @@ def _scan_file_details(
                 if rule.rule_id in {"CF001", "CF002", "CF003"}:
                     assurance_findings.append(finding)
                 break
+
+    unused_explicit_ids = set(explicit_id_map) - claim_blocks
+    if unused_explicit_ids:
+        index = min(unused_explicit_ids)
+        raise ValueError(
+            f"claimfence-id {explicit_id_map[index]!r} does not precede a "
+            f"recognized assurance claim in {path}"
+        )
 
     if "CF005" not in config.disabled_rules:
         reference_findings, reference_suppressed = _reference_findings(
@@ -572,6 +624,76 @@ def _block_suppressions(
         for index, block in enumerate(blocks)
         if block.start_line in directives
     }
+
+
+def _claim_id_directives(
+    lines: list[str],
+    blocks: list[ProseBlock],
+) -> dict[int, str]:
+    directives: list[tuple[int, str]] = []
+    fence_marker: str | None = None
+    fence_length = 0
+    for line_number, line in enumerate(lines, start=1):
+        fence = re.match(r"^\s{0,3}((?:\x60){3,}|~{3,})", line)
+        if fence:
+            marker = fence.group(1)[0]
+            length = len(fence.group(1))
+            if fence_marker is None:
+                fence_marker = marker
+                fence_length = length
+            elif marker == fence_marker and length >= fence_length:
+                fence_marker = None
+                fence_length = 0
+            continue
+        if fence_marker is not None:
+            continue
+        if re.match(r"^(?: {4}|\t)", line):
+            continue
+        candidate = _mask_inline_markup(line)
+        if "<!--" not in candidate or "claimfence-id" not in candidate.lower():
+            continue
+        match = CLAIM_ID_DIRECTIVE_PATTERN.fullmatch(candidate.strip())
+        if match is None:
+            raise ValueError(f"invalid claimfence-id directive at line {line_number}")
+        value = match.group("value").strip()
+        if CLAIM_ID_VALUE_PATTERN.fullmatch(value) is None:
+            raise ValueError(
+                f"invalid claimfence-id {value!r} at line {line_number}; "
+                "use 1-128 lowercase ASCII letters, digits, '.', '_', ':', '/', or '-'"
+            )
+        directives.append((line_number, value))
+
+    mapped: dict[int, str] = {}
+    for line_number, value in directives:
+        block_index = next(
+            (
+                index
+                for index, block in enumerate(blocks)
+                if block.start_line > line_number
+            ),
+            None,
+        )
+        if block_index is None:
+            raise ValueError(
+                f"claimfence-id {value!r} at line {line_number} has no following block"
+            )
+        intervening = lines[line_number:blocks[block_index].start_line - 1]
+        if any(
+            stripped
+            and not (stripped.startswith("<!--") and stripped.endswith("-->"))
+            for stripped in (line.strip() for line in intervening)
+        ):
+            raise ValueError(
+                f"claimfence-id {value!r} at line {line_number} must immediately "
+                "precede its claim block"
+            )
+        if block_index in mapped:
+            raise ValueError(
+                "multiple claimfence-id directives precede the block at "
+                f"line {blocks[block_index].start_line}"
+            )
+        mapped[block_index] = value
+    return mapped
 
 
 def _context(blocks: list[ProseBlock], index: int, radius: int) -> list[ProseBlock]:
@@ -940,7 +1062,16 @@ def _normalized_claim(claim: str) -> str:
     return re.sub(r"\s+", " ", claim.strip().lower())
 
 
-def _claim_record_id(path: Path, claim: str, root: Path, occurrence: int) -> str:
+def _claim_record_id(
+    path: Path,
+    claim: str,
+    root: Path,
+    occurrence: int,
+    *,
+    explicit_id: str | None = None,
+) -> str:
+    if explicit_id is not None:
+        return stable_claim_id(explicit_id)
     normalized = _normalized_claim(claim)
     try:
         stable_path = path.resolve().relative_to(root.resolve()).as_posix()

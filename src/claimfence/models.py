@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
+
+
+def stable_claim_id(explicit_id: str) -> str:
+    material = f"explicit\0{explicit_id}".encode()
+    return f"CLM-{hashlib.sha256(material).hexdigest()[:16]}"
 
 
 class Severity(IntEnum):
@@ -78,6 +84,7 @@ class EvidenceAnchor:
 @dataclass(frozen=True, slots=True)
 class ClaimRecord:
     claim_id: str
+    explicit_id: str | None
     rule_ids: tuple[str, ...]
     severity: Severity
     path: Path

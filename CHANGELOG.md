@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 - Unreleased
+
+- Add optional stable claim anchors with the one-line
+  `<!-- claimfence-id: ... -->` directive.
+- Preserve a claim's deterministic ledger identity across deliberate wording changes and
+  Markdown file moves, allowing Evidence Drift to emit field-level review events.
+- Record the author-selected value as `stable_id` in ledgers, drift events, and Evidence
+  Map source labels.
+- Reject malformed, duplicate, dangling, displaced, and multi-claim anchor ambiguity; ignore
+  directive-shaped examples inside fenced, indented, or inline code.
+- Keep v1 ledger comparison compatible with older receipts that have no `stable_id`.
+- Add Git-native Pull Request Claim Review with `--compare-ref`, removing the need to
+  generate or download a previous ledger for the first useful drift review.
+- Resolve the selected local revision to an exact commit, scan its Markdown and local
+  evidence directly from Git objects without checkout, and record the commit in the receipt.
+- Apply the current worktree policy to both revisions so the comparison isolates claim and
+  evidence drift from policy-file drift.
+- Add a composite-Action `compare-ref` input and `drift-base-commit` output.
+- Fail closed on missing revisions, non-root worktrees, unsafe Git tree paths, selected
+  symbolic links, and malformed comparison metadata.
+
 ## 0.5.1 - 2026-08-21
 
 - Correct release provenance after the published `v0.5.0` tag targeted the prior v0.4

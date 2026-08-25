@@ -3,9 +3,10 @@
 Evidence Drift answers a narrow question: **what changed between a previous ClaimFence
 claim ledger and the current scan?**
 
-It compares deterministic declarations already present in the ledgers. It does not fetch a
-URL, execute a command, inspect version-control history, authenticate the earlier ledger,
-or judge whether evidence is true, relevant, current, or sufficient.
+It compares deterministic declarations in two ledgers. The previous ledger can be supplied
+directly or generated from an existing local Git revision with `--compare-ref`. It does not
+fetch a URL or missing Git revision, execute a recorded command, authenticate the earlier
+ledger or commit, or judge whether evidence is true, relevant, current, or sufficient.
 
 ## Generate a receipt
 
@@ -37,6 +38,20 @@ comparison but is useful for retaining the current state. ClaimFence rejects out
 that would overwrite the comparison ledger and rejects a drift receipt path shared with
 another output.
 
+For pull requests, the previous ledger can instead be derived from committed Git objects:
+
+```bash
+claimfence README.md docs --root . --fail-on none \
+  --compare-ref origin/main \
+  --ledger-output current-ledger.json \
+  --drift-output claimfence-drift.json \
+  --fail-on-drift review
+```
+
+The receipt records the exact resolved base commit and `policy_source: current-worktree`.
+The ref name itself is not recorded because it can move. See
+[Pull Request Claim Review](PR_CLAIM_REVIEW.md) for the full contract.
+
 ## Event model
 
 | Event | Meaning | Review classification |
@@ -66,24 +81,35 @@ either configured gate fires and `2` when comparison input or configuration is i
 ## Stability boundary
 
 Claims are joined by their `CLM-…` identifier. Rewrapping ordinary prose and inserting an
-unrelated block do not change that identifier. A rewritten claim normally appears as one
-removed claim and one added claim, so use `any` if wording changes should halt the workflow.
+unrelated block do not change that identifier. An unanchored rewrite normally appears as one
+removed claim and one added claim, so use `any` if every inventory change should halt the
+workflow.
+
+An optional `<!-- claimfence-id: ... -->` directive preserves identity through deliberate
+rewrites and file moves. Those changes become review-classified `path` and `text` field
+events. Read the [Stable Claim Anchors contract](CLAIM_ANCHORS.md) before assigning IDs.
 
 Source line and column are deliberately ignored. Repository-local anchors use a resolved
 repository-relative identity where available, which makes `examples/bounded-readme.md` and
 `./examples/bounded-readme.md` equivalent. Commands and external URLs use their recorded
 targets. Changing the bytes at the same local identity produces `evidence-changed`.
 
-Both ledger tool versions are recorded in the receipt and workflow summary. A version
-difference is not itself an event because rule upgrades can intentionally change the
-inventory; review version transitions separately.
+Both ledger tool versions are recorded in the receipt and workflow summary. Git-native
+comparison additionally records the resolved base commit. A version difference is not
+itself an event because rule upgrades can intentionally change the inventory; review
+version transitions separately.
 
 ## Trust boundary
 
-A comparison is only as trustworthy as its previous ledger. Keep that ledger on a protected
-base revision, download it from a trusted workflow run, or bind it to an artifact with an
-attestation. Do not let an untrusted change replace both the documentation and its own
-comparison ledger.
+A comparison is only as trustworthy as its previous state. For ledger comparison, keep the
+ledger on a protected base revision, download it from a trusted workflow run, or bind it to
+an artifact with an attestation. Do not let an untrusted change replace both the
+documentation and its own comparison ledger.
+
+For Git-native comparison, prefer an exact base SHA supplied by trusted workflow metadata.
+The recorded commit binds the result to the local objects that were read; it does not prove
+remote origin, authorship, review, branch protection, or that the caller selected the
+intended merge base.
 
 ClaimFence validates the v1 schema version, producer name, claim identifiers, consumed field
 types, dispositions, evidence states, and digest shape before comparison. Input is capped at
@@ -92,7 +118,7 @@ types, dispositions, evidence states, and digest shape before comparison. Input 
 The GitHub Action accepts the same options:
 
 ```yaml
-- uses: Dean00dev/ClaimFence@v0.5.1
+- uses: Dean00dev/ClaimFence@v0.6.0
   id: claimfence
   with:
     paths: README.md docs
@@ -104,8 +130,8 @@ The GitHub Action accepts the same options:
 ```
 
 It appends the comparison to the workflow summary and exposes `drift-configured`,
-`drift-events-count`, `drift-claims-count`, `drift-review-count`, and `drift-outcome` for
-later steps.
+`drift-events-count`, `drift-claims-count`, `drift-review-count`, `drift-outcome`, and
+`drift-base-commit` for later steps.
 
 ## Limitations and interpretation boundary
 
@@ -113,6 +139,7 @@ later steps.
 - Equal bytes do not imply current, relevant, or sufficient evidence.
 - Files above 16 MiB have size but no digest, so a same-size byte change is not observable.
 - An added linked claim is still a lexical disposition, not a factual conclusion.
+- A retained stable ID declares intended continuity, not semantic equivalence.
 - A stable receipt covers only the selected paths, configuration, ledger fields, and tool
   behavior.
 - External URLs remain unfetched, and commands remain unexecuted.

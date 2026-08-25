@@ -17,6 +17,7 @@ from .drift import (
     drift_text_report,
     load_ledger,
 )
+from .git_compare import scan_git_ref
 from .models import Severity
 from .reporters import (
     github_output_report,
@@ -63,6 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="compare the current evidence ledger with a previous ledger",
     )
     parser.add_argument(
+        "--compare-ref",
+        help=(
+            "scan a local Git base revision under the current policy and compare it with "
+            "the worktree"
+        ),
+    )
+    parser.add_argument(
         "--drift-output",
         type=Path,
         help="write a deterministic evidence-drift receipt as JSON",
@@ -98,22 +106,30 @@ def main(argv: list[str] | None = None) -> int:
     current_ledger = None
     try:
         root = (args.root or Path.cwd()).resolve()
+        if args.compare_ledger and args.compare_ref:
+            raise ValueError("--compare-ledger and --compare-ref are mutually exclusive")
         if args.write_baseline and (
-            args.compare_ledger or args.drift_output or args.fail_on_drift != "none"
+            args.compare_ledger
+            or args.compare_ref
+            or args.drift_output
+            or args.fail_on_drift != "none"
         ):
             raise ValueError("--write-baseline cannot be combined with evidence-drift options")
-        if not args.compare_ledger and (
+        if not (args.compare_ledger or args.compare_ref) and (
             args.drift_output or args.fail_on_drift != "none"
         ):
-            raise ValueError("--drift-output and --fail-on-drift require --compare-ledger")
+            raise ValueError(
+                "--drift-output and --fail-on-drift require --compare-ledger or --compare-ref"
+            )
         _validate_drift_paths(args, root)
         config_path = _rooted(args.config, root)
         config = load_config(config_path, root)
         if args.fail_on:
             config.fail_on = None if args.fail_on == "none" else Severity.parse(args.fail_on)
-        requested = (_rooted(Path(value), root) for value in args.paths)
+        requested = [_rooted(Path(value), root) for value in args.paths]
+        requested_paths = [path for path in requested if path is not None]
         result = scan_paths(
-            (path for path in requested if path is not None),
+            requested_paths,
             config,
             root,
             contain_to_root=args.root is not None,
@@ -131,6 +147,18 @@ def main(argv: list[str] | None = None) -> int:
             previous_ledger = load_ledger(previous_ledger_path)
             current_ledger = ledger_payload(result, root)
             drift_payload = compare_ledgers(previous_ledger, current_ledger)
+        elif args.compare_ref:
+            previous_scan = scan_git_ref(root, requested_paths, config, args.compare_ref)
+            current_ledger = ledger_payload(result, root)
+            drift_payload = compare_ledgers(
+                previous_scan.ledger,
+                current_ledger,
+                comparison={
+                    "mode": "git-ref",
+                    "base_commit": previous_scan.commit,
+                    "policy_source": "current-worktree",
+                },
+            )
     except (OSError, ValueError, UnicodeError) as exc:
         parser.exit(2, f"claimfence: {exc}\n")
 

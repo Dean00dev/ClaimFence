@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 
 from claimfence.cli import main
@@ -165,6 +165,20 @@ class CliTests(unittest.TestCase):
                     ]
                 )
         self.assertEqual(0, code)
+
+    def test_invalid_stable_claim_anchor_returns_invalid_input_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text(
+                "<!-- claimfence-id: Upper Case -->\n\n"
+                "This gateway is secure.\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(SystemExit) as raised:
+                with redirect_stderr(StringIO()):
+                    main(["README.md", "--root", str(root), "--no-color"])
+
+        self.assertEqual(2, raised.exception.code)
 
 
 if __name__ == "__main__":

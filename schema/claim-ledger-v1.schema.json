@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.5.1/schema/claim-ledger-v1.schema.json",
+  "$id": "https://raw.githubusercontent.com/Dean00dev/ClaimFence/v0.6.0/schema/claim-ledger-v1.schema.json",
   "title": "ClaimFence claim ledger",
   "description": "A deterministic inventory of matched assurance claims and nearby evidence anchors.",
   "type": "object",
@@ -57,6 +57,7 @@
         "required": ["id", "rules", "severity", "path", "line", "column", "text", "status", "context", "suppression_reasons", "evidence"],
         "properties": {
           "id": {"type": "string", "pattern": "^CLM-[0-9a-f]{16}$"},
+          "stable_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:/-]{0,127}$"},
           "rules": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
           "severity": {"enum": ["info", "warning", "error"]},
           "path": {"type": "string"},
